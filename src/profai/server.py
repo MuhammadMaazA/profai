@@ -16,6 +16,15 @@ from .stt import STTClient
 from .prof_ai import ProfAIEducationClient
 
 
+class VoiceChatRequest(BaseModel):
+    text: str
+
+
+class StartModuleRequest(BaseModel):
+    user_id: str
+    module_id: str
+
+
 app = FastAPI(title="ProfAI API", version="0.1.0")
 
 # Add CORS middleware for frontend
@@ -44,15 +53,6 @@ class AskRequest(BaseModel):
     emotion: Optional[str] = None
     play_audio: bool = False
     user_id: Optional[str] = "default_user"
-
-
-class StartModuleRequest(BaseModel):
-    user_id: str
-    module_id: str
-
-
-class ProgressRequest(BaseModel):
-    user_id: str
 
 
 class STTRequest(BaseModel):
