@@ -1,11 +1,19 @@
 from __future__ import annotations
 import os
+import sys
+from pathlib import Path
+
+# Ensure repo/src is on path
+ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
+if str(SRC) not in sys.path:
+    sys.path.insert(0, str(SRC))
 
 # Force fake mode so no real API calls are made
 os.environ.setdefault("PROFAI_DEV_FAKE", "1")
 
-from src.profai.llm import LLMClient
-from src.profai.tts import TTSClient
+from profai.llm import LLMClient
+from profai.tts import TTSClient
 
 
 def main():
