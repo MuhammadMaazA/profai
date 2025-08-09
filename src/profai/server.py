@@ -69,7 +69,11 @@ async def ask_endpoint(payload: AskRequest):
         tts = TTSClient()
         answer = llm.generate(payload.text, emotion=payload.emotion)
         path = tts.synthesize(answer, play_audio=payload.play_audio)
-        return {"answer": answer, "audio_path": path}
+        
+        # Return just the filename for the audio URL
+        audio_filename = path.name if hasattr(path, 'name') else Path(path).name
+        
+        return {"answer": answer, "audio_path": audio_filename}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

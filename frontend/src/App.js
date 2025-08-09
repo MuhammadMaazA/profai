@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Send, Volume2 } from 'lucide-react';
+import { Mic, MicOff, Send } from 'lucide-react';
 import axios from 'axios';
 import './index.css';
 
@@ -18,7 +18,6 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [mediaRecorder, setMediaRecorder] = useState(null);
-  const [audioChunks, setAudioChunks] = useState([]);
   const messagesEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -29,45 +28,38 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  // Initialize media recorder
-  const initializeRecorder = async () => {
+  // Start recording - create new recorder each time
+  const startRecording = async () => {
+    setError('');
+    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       const recorder = new MediaRecorder(stream);
       
+      const chunks = [];
+      
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          setAudioChunks(prev => [...prev, event.data]);
+          chunks.push(event.data);
         }
       };
 
       recorder.onstop = async () => {
-        const audioBlob = new Blob(audioChunks, { type: 'audio/wav' });
+        const audioBlob = new Blob(chunks, { type: 'audio/wav' });
         await sendVoiceMessage(audioBlob);
-        setAudioChunks([]);
         
         // Stop all tracks to release the microphone
         stream.getTracks().forEach(track => track.stop());
+        setMediaRecorder(null);
       };
 
       setMediaRecorder(recorder);
+      recorder.start();
+      setIsRecording(true);
+      
     } catch (err) {
       setError('Failed to access microphone. Please make sure you have granted microphone permissions.');
       console.error('Error accessing microphone:', err);
-    }
-  };
-
-  const startRecording = async () => {
-    setError('');
-    if (!mediaRecorder) {
-      await initializeRecorder();
-      return;
-    }
-    
-    if (mediaRecorder.state === 'inactive') {
-      setAudioChunks([]);
-      mediaRecorder.start();
-      setIsRecording(true);
     }
   };
 
@@ -144,7 +136,7 @@ function App() {
       setMessages(prev => [...prev, {
         type: 'ai',
         content: answer,
-        audioUrl: audio_path ? `${API_BASE_URL}/audio/${audio_path.split('/').pop()}` : null
+        audioUrl: audio_path ? `${API_BASE_URL}/audio/${audio_path}` : null
       }]);
 
     } catch (err) {
