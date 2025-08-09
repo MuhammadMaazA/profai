@@ -1,5 +1,9 @@
 import os
 from dataclasses import dataclass
+from dotenv import load_dotenv
+
+# Load environment from .env if present
+load_dotenv()
 
 
 @dataclass
