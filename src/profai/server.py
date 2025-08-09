@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from .llm import LLMClient
 from .tts import TTSClient
+from .stt import STTClient
 
 
 app = FastAPI(title="ProfAI API", version="0.1.0")
@@ -21,6 +22,9 @@ class AskRequest(BaseModel):
     text: str
     emotion: Optional[str] = None
     play_audio: bool = False
+class STTRequest(BaseModel):
+    file_path: str
+
 
 
 @app.get("/health")
@@ -46,5 +50,15 @@ async def ask_endpoint(payload: AskRequest):
         answer = llm.generate(payload.text, emotion=payload.emotion)
         path = tts.synthesize(answer, play_audio=payload.play_audio)
         return {"answer": answer, "audio_path": path}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/stt")
+async def stt_endpoint(payload: STTRequest):
+    try:
+        stt = STTClient()
+        text = stt.transcribe_file(payload.file_path)
+        return {"text": text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

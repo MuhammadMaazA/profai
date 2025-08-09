@@ -27,16 +27,16 @@ copy .env.example .env
 # Edit .env and fill OPENAI_API_KEY and ELEVENLABS_API_KEY
 ```
 
-4) Run the CLI for a text ➜ LLM ➜ speech round-trip:
+4) Run the CLI for a text ➜ LLM ➜ speech round-trip (no keys needed in fake mode):
 
 ```
-python -m src.profai.cli "What is photosynthesis?" --emotion neutral
+$env:PROFAI_DEV_FAKE='1'; $env:PYTHONPATH="src"; python -m profai.cli "What is photosynthesis?" --emotion neutral
 ```
 
 5) Or run the API server:
 
 ```
-uvicorn src.profai.server:app --reload
+$env:PROFAI_DEV_FAKE='1'; uvicorn profai.server:app --app-dir src --reload
 ```
 
 Then POST to /ask with JSON like:
@@ -54,3 +54,6 @@ Audio files are saved under `outputs/`.
 ## Notes
 - This is the Phase 1 foundation. SER (emotion from voice) and streaming are slated for Phase 2.
 - Set ELEVENLABS_VOICE to any available voice name or ID. Default is `Bella`.
+ - Dev mode: set `PROFAI_DEV_FAKE=1` to bypass external APIs. Use `scripts/smoke_test.py` to verify a full loop without keys.
+ - STT: Use `/stt` with `{ "file_path": "path/to/audio.wav" }` in fake mode now; real transcription requires a valid `OPENAI_API_KEY`.
+ - Microphone (prototype): run `scripts/mic_chat.py` to record 5s audio and then type your question; we’ll wire mic→STT next.
