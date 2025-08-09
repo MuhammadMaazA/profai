@@ -1,34 +1,81 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Send } from 'lucide-react';
-import axios from 'axios';
-import './index.css';
+import './App_enhanced.css';
 
 const API_BASE_URL = 'http://localhost:8000';
 
 function App() {
-  const [messages, setMessages] = useState([
-    {
-      type: 'ai',
-      content: "Hello! I'm ProfAI, your AI tutor. I can help you learn about any topic. You can either type your questions or use voice chat by clicking the microphone button below.",
-      audioUrl: null
-    }
-  ]);
   const [isRecording, setIsRecording] = useState(false);
-  const [textInput, setTextInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [transcription, setTranscription] = useState('');
+  const [response, setResponse] = useState('');
   const [error, setError] = useState('');
-  const [mediaRecorder, setMediaRecorder] = useState(null);
-  const messagesEndRef = useRef(null);
+  const [textInput, setTextInput] = useState('');
+  
+  // Educational features state
+  const [curriculum, setCurriculum] = useState({});
+  const [currentModule, setCurrentModule] = useState(null);
+  const [learningProgress, setLearningProgress] = useState({});
+  const [emotionalContext, setEmotionalContext] = useState(null);
+  const [showCurriculum, setShowCurriculum] = useState(false);
+  const [userId] = useState('user_' + Date.now()); // Simple user ID for demo
+  
+  const mediaRecorderRef = useRef(null);
+  const audioChunksRef = useRef([]);
+  const audioRef = useRef(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  // Load curriculum on component mount
+  useEffect(() => {
+    fetchCurriculum();
+    fetchProgress();
+  }, []);
+
+  const fetchCurriculum = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/curriculum`);
+      const data = await response.json();
+      setCurriculum(data.modules);
+    } catch (error) {
+      console.error('Error fetching curriculum:', error);
+    }
   };
 
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+  const fetchProgress = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/progress/${userId}`);
+      const data = await response.json();
+      setLearningProgress(data);
+      if (data.current_module) {
+        setCurrentModule(data.current_module);
+      }
+    } catch (error) {
+      console.error('Error fetching progress:', error);
+    }
+  };
 
-  // Start recording - create new recorder each time
+  const startModule = async (moduleId) => {
+    try {
+      setIsProcessing(true);
+      const response = await fetch(`${API_BASE_URL}/start-module`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          user_id: userId,
+          module_id: moduleId
+        })
+      });
+      
+      const data = await response.json();
+      setCurrentModule(moduleId);
+      setResponse(data.message || 'Module started successfully!');
+      await fetchProgress(); // Refresh progress
+    } catch (error) {
+      setError('Failed to start module: ' + error.message);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
   const startRecording = async () => {
     setError('');
     
