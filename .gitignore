@@ -6,11 +6,20 @@ __pycache__/
 *.egg-info/
 .venv/
 venv/
+*.pyc
+build/
+dist/
+*.egg
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
 
 # Environment variables & API keys
 .env
 .env.local
 .env.production
+.env.development
 .env.*.local
 *_api_key.txt
 *_secret.txt
@@ -18,18 +27,56 @@ api_keys.py
 secrets.py
 config_with_keys.py
 
-# VSCode
+# Node.js / React Frontend
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.npm
+.yarn-integrity
+frontend/build/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# IDEs and Editors
 .vscode/
+.idea/
+*.swp
+*.swo
+*~
 
 # OS
 .DS_Store
 Thumbs.db
+*.tmp
+*.temp
 
-# Outputs
+# Audio/Video outputs
 outputs/
 *.wav
 *.mp3
+*.mp4
+*.webm
+*.ogg
+*.m4a
 
-# Node/Frontend (future)
-node_modules/
-dist/
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+.cache/
+
+# Testing
+.nyc_output
+coverage/
+
+# Miscellaneous
+*.bak
+*.orig
