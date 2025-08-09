@@ -100,6 +100,14 @@ function App() {
         audioUrl: audio_url ? `${API_BASE_URL}${audio_url}` : null
       }]);
 
+      // Auto-play the audio response
+      if (audio_url) {
+        const audio = new Audio(`${API_BASE_URL}${audio_url}`);
+        audio.play().catch(err => {
+          console.log('Auto-play failed (browser policy):', err);
+        });
+      }
+
     } catch (err) {
       console.error('Error sending voice message:', err);
       setError(err.response?.data?.detail || 'Failed to process voice message. Please try again.');
@@ -139,6 +147,14 @@ function App() {
         audioUrl: audio_path ? `${API_BASE_URL}/audio/${audio_path}` : null
       }]);
 
+      // Auto-play the audio response
+      if (audio_path) {
+        const audio = new Audio(`${API_BASE_URL}/audio/${audio_path}`);
+        audio.play().catch(err => {
+          console.log('Auto-play failed (browser policy):', err);
+        });
+      }
+
     } catch (err) {
       console.error('Error sending text message:', err);
       setError(err.response?.data?.detail || 'Failed to get response. Please try again.');
@@ -168,11 +184,8 @@ function App() {
               <div className="message-content">
                 {message.content}
                 {message.audioUrl && (
-                  <div className="audio-player">
-                    <audio controls>
-                      <source src={message.audioUrl} type="audio/mpeg" />
-                      Your browser does not support the audio element.
-                    </audio>
+                  <div className="audio-indicator">
+                    🔊 Audio response available
                   </div>
                 )}
               </div>
