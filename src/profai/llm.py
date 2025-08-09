@@ -17,7 +17,7 @@ class LLMClient:
                 "OPENAI_API_KEY not set. Please set environment variable OPENAI_API_KEY or enable PROFAI_DEV_FAKE."
             )
         self.model = model or settings.model
-    self.client = None if self.dev_fake else OpenAI(api_key=self.api_key)
+        self.client = None if self.dev_fake else OpenAI(api_key=self.api_key)
 
     def generate(self, user_text: str, emotion: Optional[str] = None, temperature: float = 0.7) -> str:
         system_prompt = build_system_prompt(emotion)
