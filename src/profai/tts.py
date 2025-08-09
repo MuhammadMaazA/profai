@@ -16,6 +16,66 @@ OUTPUT_DIR = Path(__file__).resolve().parents[2] / "outputs"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def get_multilingual_voice_and_model(language: str = "en") -> Dict[str, str]:
+    """
+    Returns appropriate voice and model for different languages.
+    ElevenLabs supports multilingual voices and models.
+    """
+    # Language-specific voice configurations
+    voice_configs = {
+        "en": {  # English
+            "voice": "21m00Tcm4TlvDq8ikWAM",  # Default voice (Rachel/Bella)
+            "model": "eleven_multilingual_v2"
+        },
+        "es": {  # Spanish
+            "voice": "21m00Tcm4TlvDq8ikWAM",  # Same voice works for Spanish
+            "model": "eleven_multilingual_v2"
+        },
+        "fr": {  # French
+            "voice": "21m00Tcm4TlvDq8ikWAM",
+            "model": "eleven_multilingual_v2"
+        },
+        "de": {  # German
+            "voice": "21m00Tcm4TlvDq8ikWAM",
+            "model": "eleven_multilingual_v2"
+        },
+        "it": {  # Italian
+            "voice": "21m00Tcm4TlvDq8ikWAM",
+            "model": "eleven_multilingual_v2"
+        },
+        "pt": {  # Portuguese
+            "voice": "21m00Tcm4TlvDq8ikWAM",
+            "model": "eleven_multilingual_v2"
+        },
+        "pl": {  # Polish
+            "voice": "21m00Tcm4TlvDq8ikWAM",
+            "model": "eleven_multilingual_v2"
+        },
+        "hi": {  # Hindi
+            "voice": "21m00Tcm4TlvDq8ikWAM",
+            "model": "eleven_multilingual_v2"
+        },
+        "ar": {  # Arabic
+            "voice": "21m00Tcm4TlvDq8ikWAM",
+            "model": "eleven_multilingual_v2"
+        },
+        "zh": {  # Chinese
+            "voice": "21m00Tcm4TlvDq8ikWAM",
+            "model": "eleven_multilingual_v2"
+        },
+        "ja": {  # Japanese
+            "voice": "21m00Tcm4TlvDq8ikWAM",
+            "model": "eleven_multilingual_v2"
+        },
+        "ko": {  # Korean
+            "voice": "21m00Tcm4TlvDq8ikWAM",
+            "model": "eleven_multilingual_v2"
+        }
+    }
+    
+    return voice_configs.get(language, voice_configs["en"])
+
+
 def get_voice_settings_for_emotion(user_emotion: Optional[str], content_type: str = "explanation") -> Dict[str, Any]:
     """
     Returns ElevenLabs voice settings based on user emotion and content type.
@@ -140,7 +200,7 @@ class TTSClient:
         self.voice = (default_voice or settings.elevenlabs_voice).strip()
         self.client = None if (self.dev_fake or self.disabled) else ElevenLabs(api_key=self.api_key)
 
-    def synthesize(self, text: str, voice: Optional[str] = None, play_audio: bool = True, user_emotion: Optional[str] = None) -> Path:
+    def synthesize(self, text: str, voice: Optional[str] = None, play_audio: bool = True, user_emotion: Optional[str] = None, language: str = "en") -> Path:
         # Filter out code blocks and keep only explanatory text for TTS
         speech_text = extract_speech_text(text)
         
@@ -155,6 +215,7 @@ class TTSClient:
         
         ts = int(time.time() * 1000)
         out_path = OUTPUT_DIR / f"profai_{ts}.mp3"
+        
         if self.dev_fake or self.disabled:
             # Create a tiny placeholder so pipeline completes when disabled/fake
             with open(out_path, "wb") as f:
@@ -166,61 +227,62 @@ class TTSClient:
                     pass
             return out_path
 
-        v = (voice or self.voice or "Bella").strip()
+        # Get language-specific voice and model configuration
+        lang_config = get_multilingual_voice_and_model(language)
+        selected_voice = voice or lang_config["voice"] or self.voice or "Bella"
+        model = lang_config["model"]
         
         # Get emotion-based voice settings
         voice_settings = get_voice_settings_for_emotion(user_emotion)
-        print(f"Using voice settings for emotion '{user_emotion}': {voice_settings}")
         
-        # Retry logic for API calls
-        max_retries = 3
-        for attempt in range(max_retries):
+        print(f"TTS Debug - Language: {language}, Voice: {selected_voice}, Model: {model}")
+        print(f"TTS Debug - Voice Settings: {voice_settings}")
+        print(f"TTS Debug - Speech text length: {len(speech_text)} chars")
+        
+        # Retry logic for ElevenLabs API reliability
+        max_attempts = 3
+        for attempt in range(max_attempts):
             try:
-                print(f"Generating TTS (attempt {attempt + 1}/{max_retries}) for filtered text length: {len(speech_text)} chars, voice: {v}, emotion: {user_emotion}")
+                print(f"TTS Attempt {attempt + 1}/{max_attempts}: Generating audio...")
                 
-                # Add a small delay between retries to avoid rate limiting
-                if attempt > 0:
-                    delay = random.uniform(1, 3)  # 1-3 seconds random delay
-                    print(f"Waiting {delay:.1f} seconds before retry...")
-                    time.sleep(delay)
-                
-                # Generate audio with emotion-based voice settings
+                # Generate audio with multilingual model and emotion-based settings
                 audio = self.client.generate(
-                    text=speech_text, 
-                    voice=v, 
-                    model="eleven_turbo_v2",
+                    text=speech_text,
+                    voice=selected_voice,
+                    model=model,
                     voice_settings=voice_settings
                 )
-                save(audio, str(out_path))
-                print(f"TTS audio saved successfully to: {out_path}")
                 
-                # Verify the file was created and has content
-                if out_path.exists() and out_path.stat().st_size > 100:  # More than 100 bytes means real audio
-                    print(f"Audio file size: {out_path.stat().st_size} bytes")
-                    break  # Success, exit retry loop
+                # Save the audio
+                save(audio, str(out_path))
+                
+                # Verify file was created and has reasonable size
+                if out_path.exists() and out_path.stat().st_size > 100:
+                    print(f"TTS Success: Generated {out_path.stat().st_size} bytes")
+                    if play_audio:
+                        try:
+                            play(audio)
+                        except Exception:
+                            try:
+                                if os.name == "nt":
+                                    os.startfile(str(out_path))  # type: ignore[attr-defined]
+                            except Exception:
+                                pass
+                    return out_path
                 else:
-                    print(f"Warning: Audio file is too small: {out_path.stat().st_size if out_path.exists() else 'file not found'}")
-                    continue  # Try again
+                    print(f"TTS Warning: File too small ({out_path.stat().st_size if out_path.exists() else 0} bytes)")
                     
             except Exception as e:
-                print(f"Error generating TTS audio (attempt {attempt + 1}): {e}")
-                if attempt == max_retries - 1:  # Last attempt failed
-                    print(f"All TTS attempts failed. Creating placeholder file: {out_path}")
-                    # Create a tiny placeholder so pipeline completes when API fails
-                    with open(out_path, "wb") as f:
-                        f.write(b"PLACEHOLDER_MP3")
-                    break
+                print(f"TTS Attempt {attempt + 1} failed: {e}")
+                if attempt < max_attempts - 1:
+                    delay = random.uniform(1, 3)  # Random delay between retries
+                    print(f"Retrying in {delay:.1f} seconds...")
+                    time.sleep(delay)
                 else:
-                    continue  # Try again
-
-        if play_audio and out_path.exists() and out_path.stat().st_size > 100:
-            try:
-                play(audio)
-            except Exception as e:
-                print(f"Error playing audio: {e}")
-                try:
-                    if os.name == "nt":
-                        os.startfile(str(out_path))  # type: ignore[attr-defined]
-                except Exception as e2:
-                    print(f"Error opening audio file: {e2}")
+                    print("All TTS attempts failed, creating placeholder")
+        
+        # If all attempts failed, create a placeholder file
+        with open(out_path, "wb") as f:
+            f.write(b"PLACEHOLDER_MP3")
+        
         return out_path

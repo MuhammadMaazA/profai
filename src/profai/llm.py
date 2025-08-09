@@ -47,17 +47,23 @@ class LLMClient:
         learning_path: Optional[LearningPath] = None,
         delivery_format: Optional[DeliveryFormat] = None,
         lesson_id: Optional[str] = None,
-        conversation_history: Optional[List[str]] = None
+        conversation_history: Optional[List[str]] = None,
+        language: str = "en"
     ) -> str:
-        """Generate educational response with specialization and emotion awareness"""
+        """Generate educational response with specialization, emotion awareness, and multilingual support"""
+        
+        # Add language instruction to the user text
+        language_instruction = self._get_language_instruction(language)
+        enhanced_user_text = f"{language_instruction}\n\n{user_text}" if language != "en" else user_text
         
         # Build specialized system prompt
         system_prompt = build_system_prompt(
-            user_text=user_text,
+            user_text=enhanced_user_text,
             learning_path=learning_path,
             delivery_format=delivery_format,
             lesson_id=lesson_id,
-            conversation_history=conversation_history
+            conversation_history=conversation_history,
+            language=language
         )
         
         if self.dev_fake:
@@ -66,7 +72,16 @@ class LLMClient:
         try:
             if self.use_gemini:
                 # Gemini API with improved settings for education
-                prompt = f"{system_prompt}\n\nStudent Question: {user_text}\n\nProfAI Response:"
+                if language != "en":
+                    language_names = {
+                        "es": "Spanish", "fr": "French", "de": "German", "it": "Italian", 
+                        "pt": "Portuguese", "pl": "Polish", "hi": "Hindi", "ar": "Arabic",
+                        "zh": "Chinese", "ja": "Japanese", "ko": "Korean"
+                    }
+                    lang_name = language_names.get(language, language)
+                    prompt = f"{system_prompt}\n\nStudent Question: {user_text}\n\nIMPORTANT: Your response must be ENTIRELY in {lang_name}. Do not use English.\n\nProfAI Response in {lang_name}:"
+                else:
+                    prompt = f"{system_prompt}\n\nStudent Question: {user_text}\n\nProfAI Response:"
                 
                 generation_config = {
                     'temperature': temperature,
@@ -92,11 +107,21 @@ class LLMClient:
                 return "I apologize, but I couldn't generate a response. Please try asking your question again."
             else:
                 # OpenAI API with educational focus
+                user_message = user_text
+                if language != "en":
+                    language_names = {
+                        "es": "Spanish", "fr": "French", "de": "German", "it": "Italian", 
+                        "pt": "Portuguese", "pl": "Polish", "hi": "Hindi", "ar": "Arabic",
+                        "zh": "Chinese", "ja": "Japanese", "ko": "Korean"
+                    }
+                    lang_name = language_names.get(language, language)
+                    user_message = f"{user_text}\n\nIMPORTANT: Please respond ENTIRELY in {lang_name}. Do not use English in your response."
+                
                 resp = self.client.chat.completions.create(  # type: ignore[union-attr]
                     model=self.model,
                     messages=[
                         {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": user_text},
+                        {"role": "user", "content": user_message},
                     ],
                     temperature=temperature,
                     max_tokens=600,
@@ -152,3 +177,26 @@ class LLMClient:
             conversation_history=conversation_history,
             temperature=0.4
         )
+    
+    def _get_language_instruction(self, language: str) -> str:
+        """Get language-specific instruction for the AI to respond in the target language"""
+        language_names = {
+            "en": "English",
+            "es": "Spanish (Español)", 
+            "fr": "French (Français)",
+            "de": "German (Deutsch)",
+            "it": "Italian (Italiano)",
+            "pt": "Portuguese (Português)",
+            "pl": "Polish (Polski)",
+            "hi": "Hindi (हिन्दी)",
+            "ar": "Arabic (العربية)",
+            "zh": "Chinese (中文)",
+            "ja": "Japanese (日本語)",
+            "ko": "Korean (한국어)"
+        }
+        
+        if language == "en":
+            return ""  # No instruction needed for English
+        
+        language_name = language_names.get(language, language.upper())
+        return f"Please respond in {language_name}. Provide a clear, educational explanation in {language_name}."

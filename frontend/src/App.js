@@ -19,6 +19,21 @@ const DELIVERY_FORMATS = {
   audio_lessons: { name: 'Audio Lessons', description: 'Podcast-style learning' }
 };
 
+const LANGUAGES = {
+  en: { name: 'English', flag: '🇺🇸' },
+  es: { name: 'Español', flag: '🇪🇸' },
+  fr: { name: 'Français', flag: '🇫🇷' },
+  de: { name: 'Deutsch', flag: '🇩🇪' },
+  it: { name: 'Italiano', flag: '🇮🇹' },
+  pt: { name: 'Português', flag: '🇵🇹' },
+  pl: { name: 'Polski', flag: '🇵🇱' },
+  hi: { name: 'हिन्दी', flag: '🇮🇳' },
+  ar: { name: 'العربية', flag: '🇸🇦' },
+  zh: { name: '中文', flag: '🇨🇳' },
+  ja: { name: '日本語', flag: '🇯🇵' },
+  ko: { name: '한국어', flag: '🇰🇷' }
+};
+
 function App() {
   const [messages, setMessages] = useState([
     {
@@ -38,6 +53,7 @@ function App() {
   const [showCurriculum, setShowCurriculum] = useState(false);
   const [learningPath, setLearningPath] = useState('hybrid');
   const [deliveryFormat, setDeliveryFormat] = useState('audio_lessons');
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [conversationHistory, setConversationHistory] = useState([]);
   const messagesEndRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -57,7 +73,8 @@ function App() {
         const welcomeMessage = "Hello! I'm ProfAI, your specialized AI professor. I can teach AI theory, practical tooling, or both. Choose your learning path and let's start your AI journey!";
         const response = await axios.post(`${API_BASE_URL}/tts`, {
           text: welcomeMessage,
-          play_audio: false
+          play_audio: false,
+          language: selectedLanguage
         });
 
         if (response.data.audio_path) {
@@ -201,7 +218,7 @@ function App() {
       
       formData.append('audio_file', audioBlob, filename);
 
-      const response = await axios.post(`${API_BASE_URL}/voice-chat`, formData, {
+      const response = await axios.post(`${API_BASE_URL}/voice-chat?language=${selectedLanguage}`, formData, {
         headers: {
           'Content-Type': 'multipart/form-data',
         },
@@ -292,7 +309,8 @@ function App() {
         play_audio: false,
         learning_path: learningPath,
         delivery_format: deliveryFormat,
-        conversation_history: conversationHistory
+        conversation_history: conversationHistory,
+        language: selectedLanguage
       });
 
       const { answer, audio_path } = response.data;
@@ -612,6 +630,24 @@ function App() {
               </select>
               <p className="format-description">
                 {DELIVERY_FORMATS[deliveryFormat]?.description}
+              </p>
+            </div>
+
+            <div className="setting-group">
+              <label>Language:</label>
+              <select 
+                value={selectedLanguage} 
+                onChange={(e) => setSelectedLanguage(e.target.value)}
+                className="language-select"
+              >
+                {Object.entries(LANGUAGES).map(([key, lang]) => (
+                  <option key={key} value={key}>
+                    {lang.flag} {lang.name}
+                  </option>
+                ))}
+              </select>
+              <p className="language-description">
+                AI responses and voice will be in {LANGUAGES[selectedLanguage]?.name}
               </p>
             </div>
 

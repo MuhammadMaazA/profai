@@ -3,6 +3,39 @@ from typing import Optional
 from .specializations import LearningPath, DeliveryFormat, get_lesson_by_id
 from .emotion_detection import EmotionState, emotion_detector
 
+
+def _get_language_instruction(language: str) -> str:
+    """Get language-specific instruction for the AI to respond in the target language"""
+    language_names = {
+        "en": "English",
+        "es": "Spanish (Español)", 
+        "fr": "French (Français)",
+        "de": "German (Deutsch)",
+        "it": "Italian (Italiano)",
+        "pt": "Portuguese (Português)",
+        "pl": "Polish (Polski)",
+        "hi": "Hindi (हिन्दी)",
+        "ar": "Arabic (العربية)",
+        "zh": "Chinese (中文)",
+        "ja": "Japanese (日本語)",
+        "ko": "Korean (한국어)"
+    }
+    
+    if language == "en":
+        return ""  # No instruction needed for English
+    
+    language_name = language_names.get(language, language.upper())
+    
+    # Strong, explicit language instruction
+    return f"""
+🌍 CRITICAL LANGUAGE REQUIREMENT: 
+- You MUST respond ENTIRELY in {language_name}
+- All explanations, examples, code comments must be in {language_name}
+- If you don't know how to say something in {language_name}, find an alternative way to express it in {language_name}
+- This is absolutely mandatory - the user is learning in {language_name}
+"""
+
+
 BASE_PERSONA = (
     "You are ProfAI, an expert AI professor specializing in teaching AI/ML concepts and tools. "
     "You are MIT-level intelligent but can adapt your teaching to any level.\n\n"
@@ -90,9 +123,16 @@ def build_system_prompt(
     learning_path: Optional[LearningPath] = None, 
     delivery_format: Optional[DeliveryFormat] = None,
     lesson_id: Optional[str] = None,
-    conversation_history: Optional[list] = None
+    conversation_history: Optional[list] = None,
+    language: str = "en"
 ) -> str:
-    """Build a specialized system prompt based on learning context and emotion"""
+    """Build a specialized system prompt based on learning context, emotion, and language"""
+    
+    # Add language instruction to base persona
+    language_instruction = _get_language_instruction(language)
+    base_prompt = BASE_PERSONA
+    if language_instruction:
+        base_prompt = f"{BASE_PERSONA}\n\nLANGUAGE INSTRUCTION:\n{language_instruction}"
     
     # Analyze emotion from user input and conversation
     if conversation_history:

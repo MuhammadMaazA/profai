@@ -42,6 +42,7 @@ class TTSRequest(BaseModel):
     voice: Optional[str] = None
     play_audio: bool = False
     emotion: Optional[str] = None  # For emotion-based voice adjustments
+    language: str = "en"  # Language code for multilingual TTS
 
 
 class AskRequest(BaseModel):
@@ -52,6 +53,7 @@ class AskRequest(BaseModel):
     delivery_format: Optional[str] = None
     lesson_id: Optional[str] = None
     conversation_history: Optional[List[str]] = None
+    language: str = "en"  # Language for response and TTS
 
 
 class STTRequest(BaseModel):
@@ -191,8 +193,14 @@ async def tts_endpoint(payload: TTSRequest):
             emotion_analysis = emotion_detector.analyze_text_emotion(payload.text)
             user_emotion = emotion_analysis.primary_emotion.value
         
-        print(f"TTS endpoint: generating with emotion '{user_emotion}' for text length {len(payload.text)}")
-        path = tts.synthesize(payload.text, voice=payload.voice, play_audio=payload.play_audio, user_emotion=user_emotion)
+        print(f"TTS endpoint: generating with emotion '{user_emotion}', language '{payload.language}' for text length {len(payload.text)}")
+        path = tts.synthesize(
+            payload.text, 
+            voice=payload.voice, 
+            play_audio=payload.play_audio, 
+            user_emotion=user_emotion,
+            language=payload.language
+        )
         return {"audio_path": str(path)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -230,20 +238,26 @@ async def ask_endpoint(payload: AskRequest):
             learning_path=learning_path,
             delivery_format=delivery_format,
             lesson_id=payload.lesson_id,
-            conversation_history=payload.conversation_history
+            conversation_history=payload.conversation_history,
+            language=payload.language
         )
         
-        # Generate TTS with emotion-aware voice settings
-        print(f"Generating TTS for text request with detected emotion: {user_emotion}")
-        path = tts.synthesize(answer, play_audio=payload.play_audio, user_emotion=user_emotion)
+        # Generate TTS with emotion-aware voice settings and language support
+        print(f"Generating TTS for text request with detected emotion: {user_emotion}, language: {payload.language}")
+        path = tts.synthesize(
+            answer, 
+            play_audio=payload.play_audio, 
+            user_emotion=user_emotion,
+            language=payload.language
+        )
         return {"answer": answer, "audio_path": str(path)}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/voice-chat")
-async def voice_chat_endpoint(audio_file: UploadFile = File(...)):
-    """Complete voice-to-voice chat endpoint with emotional intelligence"""
+async def voice_chat_endpoint(audio_file: UploadFile = File(...), language: str = "en"):
+    """Complete voice-to-voice chat endpoint with emotional intelligence and multilingual support"""
     try:
         # Determine file extension based on content type
         content_type = audio_file.content_type or ""
@@ -275,8 +289,10 @@ async def voice_chat_endpoint(audio_file: UploadFile = File(...)):
         llm = LLMClient()
         tts = TTSClient()
         
-        # Step 1: Transcribe audio
-        transcription = stt.transcribe_file(tmp_file_path)
+        # Step 1: Transcribe audio with language support
+        transcription_result = stt.transcribe_file(tmp_file_path, language=language if language != "en" else None)
+        transcription = transcription_result["text"] if isinstance(transcription_result, dict) else transcription_result
+        detected_language = transcription_result.get("language", language) if isinstance(transcription_result, dict) else language
         
         # Clean up temp file
         os.unlink(tmp_file_path)
@@ -290,13 +306,19 @@ async def voice_chat_endpoint(audio_file: UploadFile = File(...)):
         response = llm.generate(
             user_text=transcription, 
             emotion=emotion_analysis.primary_emotion.value,
+            language=detected_language,
             learning_path=LearningPath.HYBRID,  # Default to hybrid learning
             delivery_format=DeliveryFormat.AUDIO_LESSONS  # Optimized for audio
         )
         
         # Step 3: Convert response to speech with emotion-based voice settings
         print(f"Generating TTS for response length: {len(response)} characters, user emotion: {emotion_analysis.primary_emotion.value}")
-        audio_path = tts.synthesize(response, play_audio=False, user_emotion=emotion_analysis.primary_emotion.value)
+        audio_path = tts.synthesize(
+            response, 
+            play_audio=False, 
+            user_emotion=emotion_analysis.primary_emotion.value,
+            language=detected_language
+        )
         print(f"TTS generated with emotion-based voice settings, audio path: {audio_path}")
         
         # Check if the audio file was created successfully
