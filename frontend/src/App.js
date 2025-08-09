@@ -76,219 +76,310 @@ function App() {
       setIsProcessing(false);
     }
   };
+
   const startRecording = async () => {
-    setError('');
-    
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = new MediaRecorder(stream, {
+        mimeType: 'audio/webm;codecs=opus'
+      });
       
-      const chunks = [];
+      audioChunksRef.current = [];
       
-      recorder.ondataavailable = (event) => {
+      mediaRecorderRef.current.ondataavailable = (event) => {
         if (event.data.size > 0) {
-          chunks.push(event.data);
+          audioChunksRef.current.push(event.data);
         }
       };
-
-      recorder.onstop = async () => {
-        const audioBlob = new Blob(chunks, { type: 'audio/wav' });
-        await sendVoiceMessage(audioBlob);
-        
-        // Stop all tracks to release the microphone
-        stream.getTracks().forEach(track => track.stop());
-        setMediaRecorder(null);
-      };
-
-      setMediaRecorder(recorder);
-      recorder.start();
-      setIsRecording(true);
       
-    } catch (err) {
-      setError('Failed to access microphone. Please make sure you have granted microphone permissions.');
-      console.error('Error accessing microphone:', err);
+      mediaRecorderRef.current.onstop = () => {
+        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm;codecs=opus' });
+        sendVoiceMessage(audioBlob);
+        
+        // Stop all tracks to release microphone
+        stream.getTracks().forEach(track => track.stop());
+      };
+      
+      mediaRecorderRef.current.start();
+      setIsRecording(true);
+      setError('');
+    } catch (error) {
+      setError('Failed to access microphone: ' + error.message);
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorder && mediaRecorder.state === 'recording') {
-      mediaRecorder.stop();
+    if (mediaRecorderRef.current && isRecording) {
+      mediaRecorderRef.current.stop();
       setIsRecording(false);
     }
   };
 
   const sendVoiceMessage = async (audioBlob) => {
-    setIsLoading(true);
-    setError('');
-
+    setIsProcessing(true);
+    
+    const formData = new FormData();
+    formData.append('audio_file', audioBlob, 'voice_message.webm');
+    formData.append('user_id', userId);
+    
     try {
-      const formData = new FormData();
-      formData.append('audio_file', audioBlob, 'recording.wav');
-
-      const response = await axios.post(`${API_BASE_URL}/voice-chat`, formData, {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
+      const response = await fetch(`${API_BASE_URL}/voice-chat-enhanced`, {
+        method: 'POST',
+        body: formData
       });
-
-      const { transcription, response: aiResponse, audio_url } = response.data;
-
-      // Add user message (transcription)
-      setMessages(prev => [...prev, {
-        type: 'user',
-        content: transcription,
-        audioUrl: null
-      }]);
-
-      // Add AI response
-      setMessages(prev => [...prev, {
-        type: 'ai',
-        content: aiResponse,
-        audioUrl: audio_url ? `${API_BASE_URL}${audio_url}` : null
-      }]);
-
-      // Auto-play the audio response
-      if (audio_url) {
-        const audio = new Audio(`${API_BASE_URL}${audio_url}`);
-        audio.play().catch(err => {
-          console.log('Auto-play failed (browser policy):', err);
-        });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-
-    } catch (err) {
-      console.error('Error sending voice message:', err);
-      setError(err.response?.data?.detail || 'Failed to process voice message. Please try again.');
+      
+      const data = await response.json();
+      setTranscription(data.transcription);
+      setResponse(data.response);
+      setEmotionalContext(data.educational_context);
+      
+      if (data.audio_url) {
+        const audio = new Audio(`${API_BASE_URL}${data.audio_url}`);
+        audioRef.current = audio;
+        
+        // Auto-play the response
+        try {
+          await audio.play();
+        } catch (playError) {
+          console.log('Auto-play failed, user interaction required');
+        }
+      }
+      
+      // Refresh progress after interaction
+      await fetchProgress();
+      
+    } catch (error) {
+      setError('Failed to process voice message: ' + error.message);
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
     }
   };
 
   const sendTextMessage = async () => {
     if (!textInput.trim()) return;
-
-    const userMessage = textInput.trim();
-    setTextInput('');
-    setIsLoading(true);
-    setError('');
-
-    // Add user message immediately
-    setMessages(prev => [...prev, {
-      type: 'user',
-      content: userMessage,
-      audioUrl: null
-    }]);
-
+    
+    setIsProcessing(true);
+    
     try {
-      const response = await axios.post(`${API_BASE_URL}/ask`, {
-        text: userMessage,
-        emotion: 'friendly',
-        play_audio: false
+      const response = await fetch(`${API_BASE_URL}/ask`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          text: textInput,
+          play_audio: true,
+          user_id: userId
+        })
       });
-
-      const { answer, audio_path } = response.data;
-
-      // Add AI response
-      setMessages(prev => [...prev, {
-        type: 'ai',
-        content: answer,
-        audioUrl: audio_path ? `${API_BASE_URL}/audio/${audio_path}` : null
-      }]);
-
-      // Auto-play the audio response
-      if (audio_path) {
-        const audio = new Audio(`${API_BASE_URL}/audio/${audio_path}`);
-        audio.play().catch(err => {
-          console.log('Auto-play failed (browser policy):', err);
-        });
+      
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-
-    } catch (err) {
-      console.error('Error sending text message:', err);
-      setError(err.response?.data?.detail || 'Failed to get response. Please try again.');
+      
+      const data = await response.json();
+      setResponse(data.response);
+      setEmotionalContext(data.educational_context);
+      
+      if (data.audio_url) {
+        const audio = new Audio(`${API_BASE_URL}${data.audio_url}`);
+        audioRef.current = audio;
+        
+        try {
+          await audio.play();
+        } catch (playError) {
+          console.log('Auto-play failed');
+        }
+      }
+      
+      setTextInput('');
+      await fetchProgress();
+      
+    } catch (error) {
+      setError('Failed to send message: ' + error.message);
     } finally {
-      setIsLoading(false);
+      setIsProcessing(false);
     }
   };
 
-  const handleKeyPress = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      sendTextMessage();
+  const getEmotionIcon = (emotion) => {
+    switch (emotion?.toLowerCase()) {
+      case 'confused': return '😕';
+      case 'frustrated': return '😤';
+      case 'excited': return '😃';
+      case 'confident': return '😎';
+      case 'curious': return '🤔';
+      default: return '😊';
+    }
+  };
+
+  const getDifficultyColor = (difficulty) => {
+    switch (difficulty?.toLowerCase()) {
+      case 'beginner': return '#4CAF50';
+      case 'intermediate': return '#FF9800';
+      case 'advanced': return '#F44336';
+      default: return '#2196F3';
     }
   };
 
   return (
-    <div className="app">
-      <div className="header">
-        <h1>🎓 ProfAI</h1>
-        <p>Your AI Tutor with Voice Chat</p>
-      </div>
+    <div className="App">
+      <header className="App-header">
+        <h1>🎓 ProfAI - AI Professor with Emotional Intelligence</h1>
+        <p className="subtitle">Voice-driven AI education with personalized learning</p>
+      </header>
 
-      <div className="chat-container">
-        <div className="chat-messages">
-          {messages.map((message, index) => (
-            <div key={index} className={`message ${message.type}`}>
-              <div className="message-content">
-                {message.content}
-                {message.audioUrl && (
-                  <div className="audio-indicator">
-                    🔊 Audio response available
-                  </div>
-                )}
+      <main className="main-content">
+        {/* Educational Dashboard */}
+        <div className="education-panel">
+          <div className="current-status">
+            <h3>Learning Status</h3>
+            {currentModule && (
+              <div className="current-module">
+                <span className="module-label">Current Module:</span>
+                <span className="module-name">{curriculum[currentModule]?.title || currentModule}</span>
               </div>
+            )}
+            {emotionalContext && (
+              <div className="emotional-state">
+                <span className="emotion-icon">{getEmotionIcon(emotionalContext.detected_emotion)}</span>
+                <span className="emotion-text">
+                  {emotionalContext.detected_emotion} 
+                  {emotionalContext.confidence_level && ` (${emotionalContext.confidence_level}% confidence)`}
+                </span>
+              </div>
+            )}
+          </div>
+
+          <button 
+            className="curriculum-toggle"
+            onClick={() => setShowCurriculum(!showCurriculum)}
+          >
+            {showCurriculum ? '📚 Hide Curriculum' : '📚 Show Curriculum'}
+          </button>
+        </div>
+
+        {/* Curriculum Panel */}
+        {showCurriculum && (
+          <div className="curriculum-panel">
+            <h3>Available Learning Modules</h3>
+            <div className="modules-grid">
+              {Object.entries(curriculum).map(([moduleId, module]) => (
+                <div key={moduleId} className="module-card">
+                  <div className="module-header">
+                    <h4>{module.title}</h4>
+                    <span 
+                      className="difficulty-badge"
+                      style={{ backgroundColor: getDifficultyColor(module.difficulty) }}
+                    >
+                      {module.difficulty}
+                    </span>
+                  </div>
+                  <p className="module-description">{module.description}</p>
+                  <div className="module-stats">
+                    <span>📚 {module.theory_count} topics</span>
+                    <span>🛠️ {module.project_count} projects</span>
+                    <span>⏱️ {module.estimated_time}</span>
+                  </div>
+                  {module.prerequisites && module.prerequisites.length > 0 && (
+                    <div className="prerequisites">
+                      <strong>Prerequisites:</strong> {module.prerequisites.join(', ')}
+                    </div>
+                  )}
+                  <button 
+                    className="start-module-btn"
+                    onClick={() => startModule(moduleId)}
+                    disabled={isProcessing || currentModule === moduleId}
+                  >
+                    {currentModule === moduleId ? '✅ Active' : '🚀 Start Module'}
+                  </button>
+                </div>
+              ))}
             </div>
-          ))}
-          
-          {isLoading && (
-            <div className="loading">
-              <div className="loading-spinner"></div>
-              <span>Processing...</span>
+          </div>
+        )}
+
+        {/* Chat Interface */}
+        <div className="chat-section">
+          <div className="input-section">
+            <h3>Chat with ProfAI</h3>
+            
+            {/* Voice Input */}
+            <div className="voice-controls">
+              <button 
+                className={`record-btn ${isRecording ? 'recording' : ''}`}
+                onClick={isRecording ? stopRecording : startRecording}
+                disabled={isProcessing}
+              >
+                {isRecording ? '🔴 Stop Recording' : '🎤 Start Recording'}
+              </button>
+              {isRecording && <div className="recording-indicator">🎵 Recording...</div>}
+            </div>
+
+            {/* Text Input */}
+            <div className="text-input-section">
+              <textarea
+                className="text-input"
+                value={textInput}
+                onChange={(e) => setTextInput(e.target.value)}
+                placeholder="Type your question or message..."
+                rows="3"
+                disabled={isProcessing}
+              />
+              <button 
+                className="send-btn"
+                onClick={sendTextMessage}
+                disabled={isProcessing || !textInput.trim()}
+              >
+                💬 Send Message
+              </button>
+            </div>
+          </div>
+
+          {/* Processing Indicator */}
+          {isProcessing && (
+            <div className="processing-indicator">
+              <div className="spinner"></div>
+              <span>ProfAI is thinking...</span>
             </div>
           )}
-          
-          <div ref={messagesEndRef} />
-        </div>
 
-        {error && <div className="error">{error}</div>}
+          {/* Error Display */}
+          {error && (
+            <div className="error-message">
+              ❌ {error}
+            </div>
+          )}
 
-        <div className="voice-controls">
-          {/* Voice Recording Button */}
-          <button
-            className={`recording-button ${isRecording ? 'recording' : ''}`}
-            onClick={isRecording ? stopRecording : startRecording}
-            disabled={isLoading}
-          >
-            {isRecording ? <MicOff size={32} /> : <Mic size={32} />}
-          </button>
-          
-          <div className="status">
-            {isRecording 
-              ? "🎙️ Recording... Click to stop" 
-              : "🎤 Click to start voice chat"
-            }
-          </div>
+          {/* Results Display */}
+          <div className="results-section">
+            {transcription && (
+              <div className="transcription-result">
+                <h4>📝 You said:</h4>
+                <p>{transcription}</p>
+              </div>
+            )}
 
-          {/* Text Input Section */}
-          <div className="text-input-section">
-            <input
-              type="text"
-              className="text-input"
-              placeholder="Or type your question here..."
-              value={textInput}
-              onChange={(e) => setTextInput(e.target.value)}
-              onKeyPress={handleKeyPress}
-              disabled={isLoading}
-            />
-            <button
-              className="send-button"
-              onClick={sendTextMessage}
-              disabled={isLoading || !textInput.trim()}
-            >
-              <Send size={20} />
-            </button>
+            {response && (
+              <div className="response-result">
+                <h4>🎓 ProfAI responds:</h4>
+                <p>{response}</p>
+              </div>
+            )}
+
+            {emotionalContext?.suggested_action && (
+              <div className="suggestion-panel">
+                <h4>💡 Suggested Next Action:</h4>
+                <p>{emotionalContext.suggested_action}</p>
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }
