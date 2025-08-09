@@ -17,27 +17,37 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 class TTSClient:
     def __init__(self, api_key: Optional[str] = None, default_voice: Optional[str] = None) -> None:
         self.api_key = api_key or settings.elevenlabs_api_key
-        if not self.api_key:
+        self.dev_fake = os.getenv("PROFAI_DEV_FAKE", "").lower() in {"1", "true", "yes"}
+        if not self.api_key and not self.dev_fake:
             raise RuntimeError(
-                "ELEVENLABS_API_KEY not set. Please set environment variable ELEVENLABS_API_KEY."
+                "ELEVENLABS_API_KEY not set. Please set environment variable ELEVENLABS_API_KEY or enable PROFAI_DEV_FAKE."
             )
         self.voice = (default_voice or settings.elevenlabs_voice).strip()
-        self.client = ElevenLabs(api_key=self.api_key)
+        self.client = None if self.dev_fake else ElevenLabs(api_key=self.api_key)
 
     def synthesize(self, text: str, voice: Optional[str] = None, play_audio: bool = True) -> str:
-        v = (voice or self.voice or "Bella").strip()
-        audio = self.client.generate(text=text, voice=v, model="eleven_turbo_v2")
-
         ts = int(time.time() * 1000)
         out_path = OUTPUT_DIR / f"profai_{ts}.mp3"
+        if self.dev_fake:
+            # Create a tiny silent MP3 placeholder so the pipeline completes in dev
+            # We'll write a minimal file header (not a valid MP3 stream but a marker)
+            with open(out_path, "wb") as f:
+                f.write(b"FAKE_MP3_PLACEHOLDER")
+            if play_audio and os.name == "nt":
+                try:
+                    os.startfile(str(out_path))  # type: ignore[attr-defined]
+                except Exception:
+                    pass
+            return str(out_path)
+
+        v = (voice or self.voice or "Bella").strip()
+        audio = self.client.generate(text=text, voice=v, model="eleven_turbo_v2")
         save(audio, str(out_path))
 
         if play_audio:
             try:
-                # Try SDK playback first (cross-platform)
                 play(audio)
             except Exception:
-                # Fallback: on Windows, open via default player
                 try:
                     if os.name == "nt":
                         os.startfile(str(out_path))  # type: ignore[attr-defined]
