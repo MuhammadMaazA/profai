@@ -53,14 +53,21 @@ class PersonalizedQuizGenerator:
         )
         
         # Generate quiz using LLM with higher token limit for complete quiz
+        print(f"🎯 Generating quiz for: {chapter_title}")
+        print(f"📝 Quiz prompt length: {len(quiz_prompt)} characters")
+        
         quiz_response = self.llm.generate_quiz(
             user_text=quiz_prompt,
             temperature=0.7
         )
         
+        print(f"🤖 LLM Response length: {len(quiz_response)} characters")
+        print(f"🤖 LLM Response preview: {quiz_response[:200]}...")
+        
         # Parse and structure the quiz
         questions = self._parse_quiz_response(quiz_response)
         
+        print(f"✅ Generated {len(questions)} questions")
         return questions
     
     def _build_quiz_prompt(
@@ -139,16 +146,16 @@ Generate the quiz now:
     
     def _parse_quiz_response(self, response: str) -> List[QuizQuestion]:
         """Parse LLM response into structured quiz questions with robust error handling"""
-        print(f"Full LLM response length: {len(response)}")
-        print(f"Full LLM response: {response}")
+        print(f"🔍 Full LLM response length: {len(response)}")
+        print(f"🔍 Full LLM response: {response}")
         print("=" * 50)
         
         try:
             # Extract JSON from response with better bracket matching
             json_start = response.find('{')
             if json_start == -1:
-                print("No JSON found in response")
-                return self._generate_fallback_quiz()
+                print("❌ No JSON found in response")
+                return self._generate_better_fallback_quiz()
             
             # Find the matching closing brace by counting brackets
             bracket_count = 0
@@ -277,76 +284,116 @@ Generate the quiz now:
             print(f"Problematic JSON: {json_str if 'json_str' in locals() else response[:500]}")
             return self._generate_better_fallback_quiz()
         except Exception as e:
-            print(f"Error parsing quiz response: {e}")
+            print(f"❌ Error parsing quiz response: {e}")
             return self._generate_better_fallback_quiz()
     
-    def _generate_fallback_quiz(self) -> List[QuizQuestion]:
-        """Generate basic fallback quiz if parsing fails"""
-        return [
-            QuizQuestion(
-                id="fallback1",
-                question="What did you learn from this chapter?",
-                options=[
-                    "New concepts and applications",
-                    "Nothing new",
-                    "Some useful information",
-                    "Everything was confusing"
-                ],
-                correct_answer=0,
-                explanation="Learning new concepts is the goal of each chapter.",
-                difficulty="easy",
-                topic="general",
-                concepts=["learning", "comprehension"]
-            )
-        ]
-    
     def _generate_better_fallback_quiz(self) -> List[QuizQuestion]:
-        """Generate a more comprehensive fallback quiz"""
+        """Generate a comprehensive coding-focused fallback quiz"""
         return [
             QuizQuestion(
                 id="fallback1",
-                question="What was the main topic covered in this chapter?",
+                question="What is a variable in programming?",
                 options=[
-                    "The core concepts and their applications",
-                    "Random unrelated information",
-                    "Only basic definitions",
-                    "Abstract theories without examples"
+                    "A container that stores data values",
+                    "A type of loop structure", 
+                    "A mathematical equation",
+                    "A debugging tool"
                 ],
                 correct_answer=0,
-                explanation="Chapters typically focus on core concepts and their practical applications.",
+                explanation="A variable is a container that stores data values that can be changed during program execution.",
                 difficulty="easy",
-                topic="comprehension",
-                concepts=["understanding", "main ideas"]
+                topic="variables",
+                concepts=["programming basics", "data storage"]
             ),
             QuizQuestion(
-                id="fallback2",
-                question="How would you apply what you learned?",
+                id="fallback2", 
+                question="What does a loop do in programming?",
                 options=[
-                    "Practice with real-world examples",
-                    "Memorize all definitions",
-                    "Skip to the next chapter",
-                    "Only read the summary"
+                    "Stores data permanently",
+                    "Repeats a block of code multiple times",
+                    "Creates user interfaces",
+                    "Connects to the internet"
                 ],
-                correct_answer=0,
-                explanation="Active practice with real-world examples helps solidify learning.",
-                difficulty="medium",
-                topic="application",
-                concepts=["practical application", "skill development"]
+                correct_answer=1,
+                explanation="Loops allow you to repeat a block of code multiple times, which is essential for automation and efficiency.",
+                difficulty="easy",
+                topic="loops",
+                concepts=["control structures", "repetition"]
             ),
             QuizQuestion(
                 id="fallback3",
-                question="What should be your next learning step?",
+                question="What is the purpose of an if statement?",
                 options=[
-                    "Review and practice the concepts",
-                    "Move on without understanding",
-                    "Only read more theory",
-                    "Ask someone else to explain everything"
+                    "To repeat code continuously",
+                    "To store user input",
+                    "To make decisions based on conditions",
+                    "To display output to users"
                 ],
-                correct_answer=0,
-                explanation="Reviewing and practicing helps reinforce understanding before moving forward.",
-                difficulty="easy",
-                topic="learning strategy",
-                concepts=["review", "practice", "learning progression"]
+                correct_answer=2,
+                explanation="If statements allow programs to make decisions by executing different code based on whether conditions are true or false.",
+                difficulty="medium",
+                topic="conditionals",
+                concepts=["decision making", "logic"]
+            ),
+            QuizQuestion(
+                id="fallback4",
+                question="What is debugging in programming?",
+                options=[
+                    "Writing new code features",
+                    "Finding and fixing errors in code",
+                    "Designing user interfaces", 
+                    "Testing code performance"
+                ],
+                correct_answer=1,
+                explanation="Debugging is the process of finding and fixing bugs (errors) in your code to make it work correctly.",
+                difficulty="medium",
+                topic="debugging",
+                concepts=["problem solving", "error fixing"]
+            ),
+            QuizQuestion(
+                id="fallback5",
+                question="Which of these is a good practice when writing code?",
+                options=[
+                    "Never add comments to explain your code",
+                    "Use meaningful names for variables and functions",
+                    "Write all code in one long line",
+                    "Ignore error messages completely"
+                ],
+                correct_answer=1,
+                explanation="Using meaningful names makes your code easier to read and understand for yourself and others.",
+                difficulty="medium",
+                topic="best practices",
+                concepts=["code quality", "readability"]
+            ),
+            QuizQuestion(
+                id="fallback6",
+                question="What is an algorithm?",
+                options=[
+                    "A programming language",
+                    "A step-by-step procedure to solve a problem",
+                    "A type of computer hardware",
+                    "A debugging tool"
+                ],
+                correct_answer=1,
+                explanation="An algorithm is a step-by-step procedure or set of rules for solving a problem or completing a task.",
+                difficulty="easy", 
+                topic="algorithms",
+                concepts=["problem solving", "logic"]
+            ),
+            QuizQuestion(
+                id="fallback7",
+                question="What happens when you run a program?",
+                options=[
+                    "The code is deleted from memory",
+                    "The computer translates and executes your instructions",
+                    "The code is automatically corrected",
+                    "Nothing happens until you debug it"
+                ],
+                correct_answer=1,
+                explanation="When you run a program, the computer translates your code into machine instructions and executes them step by step.",
+                difficulty="medium",
+                topic="program execution", 
+                concepts=["computer processing", "code execution"]
             )
         ]
     
