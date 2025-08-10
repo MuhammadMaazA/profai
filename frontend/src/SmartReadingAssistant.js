@@ -13,7 +13,6 @@ const SmartReadingAssistant = ({ content, title }) => {
   const [currentSection, setCurrentSection] = useState('');
   
   const contentRef = useRef(null);
-  const helpPanelRef = useRef(null);
   const debounceRef = useRef(null);
 
   // Track reading progress and visible content
@@ -41,7 +40,7 @@ const SmartReadingAssistant = ({ content, title }) => {
         analyzeCurrentReading(visibleText, progress);
       }, 1000);
     }
-  }, [currentSection]);
+  }, [currentSection, analyzeCurrentReading]);
 
   useEffect(() => {
     const element = contentRef.current;
@@ -71,7 +70,7 @@ const SmartReadingAssistant = ({ content, title }) => {
     return '';
   };
 
-  const analyzeCurrentReading = async (visibleText, scrollPosition) => {
+  const analyzeCurrentReading = useCallback(async (visibleText, scrollPosition) => {
     if (!visibleText || isAnalyzing) return;
 
     setIsAnalyzing(true);
@@ -97,7 +96,7 @@ const SmartReadingAssistant = ({ content, title }) => {
     } finally {
       setIsAnalyzing(false);
     }
-  };
+  }, [content, isAnalyzing]);
 
   // Handle text selection for instant help
   const handleTextSelection = () => {

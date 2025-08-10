@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Send, BookOpen, Code, Zap, MessageCircle, GraduationCap, Youtube } from 'lucide-react';
+import { Mic, MicOff, Send, BookOpen, Code, Zap, MessageCircle, Youtube } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import PlaylistCurriculumManager from './PlaylistCurriculumManager';
@@ -63,8 +63,9 @@ function App() {
   useEffect(() => {
     // Automatic welcome audio disabled to save API credits
     // Only generate TTS when user explicitly requests it
-    return; // Early return to disable this feature
+    // If you want to re-enable this feature, uncomment the code below:
     
+    /*
     // Only generate welcome audio when on chat tab
     if (activeTab !== 'chat') return;
     
@@ -108,6 +109,7 @@ function App() {
     };
 
     generateWelcomeAudio();
+    */
   }, [activeTab, selectedLanguage]); // Depend on activeTab and selectedLanguage
 
   const startRecording = async () => {

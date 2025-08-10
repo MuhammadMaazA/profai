@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import ReactMarkdown from 'react-markdown';
 import axios from 'axios';
-import { CheckCircle, XCircle, ArrowRight, ArrowLeft, RotateCcw, Trophy, Target } from 'lucide-react';
+import { CheckCircle, ArrowRight, ArrowLeft, RotateCcw, Trophy, Target } from 'lucide-react';
 
 const API_BASE_URL = 'http://localhost:8000';
 
@@ -15,11 +15,7 @@ const PersonalizedQuiz = ({ chapterContent, chapterTitle, onQuizComplete }) => {
   const [quizResults, setQuizResults] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);  // Add submission state
 
-  useEffect(() => {
-    generateQuiz();
-  }, [chapterContent, chapterTitle]);
-
-  const generateQuiz = async () => {
+  const generateQuiz = useCallback(async () => {
     setIsLoading(true);
     try {
       const response = await axios.post(`${API_BASE_URL}/generate-quiz`, {
@@ -35,7 +31,11 @@ const PersonalizedQuiz = ({ chapterContent, chapterTitle, onQuizComplete }) => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [chapterContent, chapterTitle]);
+
+  useEffect(() => {
+    generateQuiz();
+  }, [generateQuiz]);
 
   const handleAnswerSelect = (answerIndex) => {
     setSelectedAnswer(answerIndex);

@@ -28,7 +28,7 @@ const ConfusionDetector = ({ currentText, onConfusionDetected, isActive = true, 
       stopCamera();
       stopPositionTracking();
     };
-  }, [isActive]);
+  }, [isActive, initializeCamera, startPositionTracking]);
 
   const startPositionTracking = () => {
     // Track scroll position to determine what user is reading
@@ -73,7 +73,7 @@ const ConfusionDetector = ({ currentText, onConfusionDetected, isActive = true, 
     let bestNode = null;
     let bestDistance = Infinity;
 
-    while (currentNode = walker.nextNode()) {
+    while ((currentNode = walker.nextNode())) {
       const range = document.createRange();
       range.selectNodeContents(currentNode);
       const rect = range.getBoundingClientRect();
