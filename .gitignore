@@ -66,6 +66,7 @@ outputs/
 
 # User data and flashcards
 data/
+curriculum_data/
 flashcards/
 *.flashcard.json
 
