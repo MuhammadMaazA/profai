@@ -64,6 +64,11 @@ outputs/
 *.ogg
 *.m4a
 
+# User data and flashcards
+data/
+flashcards/
+*.flashcard.json
+
 # Logs
 *.log
 logs/
