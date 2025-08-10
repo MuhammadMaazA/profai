@@ -1,59 +1,261 @@
-# ProfAI
+# ProfAI 🎓
 
-Emotionally intelligent AI tutor. This repo contains a minimal Phase 1 backend that lets you:
+An emotionally intelligent AI tutor with voice chat and YouTube-based curricula. ProfAI combines advanced AI conversation with interactive learning features including:
 
-- Ask a question (CLI or API)
-- Get an empathetic, concise answer from an LLM
-- Hear the answer via ElevenLabs TTS
+- **Voice Chat**: Real-time voice conversations with emotion detection
+- **YouTube Curricula**: Process YouTube playlists into structured learning paths
+- **Smart Reading Assistant**: Get instant explanations for confusing text
+- **Personalized Quizzes**: AI-generated quizzes based on video content
+- **Code Playground**: Interactive coding environment for learning
+- **Confusion Detection**: Real-time help when you're struggling
 
-## Quickstart
+## 🚀 Quick Start (Easiest Method)
 
-1) Create and activate a virtual environment (Windows PowerShell):
+### For Windows Users
+1. **Double-click** `start_fullstack.bat` - This will automatically:
+   - Install frontend dependencies
+   - Start the backend server on port 8000
+   - Start the frontend on port 3000
+   - Open your browser to the application
 
-```
-python -m venv .venv; .\.venv\Scripts\Activate.ps1
-```
+### For All Platforms
+1. **Run the Python launcher**:
+   ```bash
+   python start_fullstack.py
+   ```
 
-2) Install dependencies:
+Both methods will automatically handle dependencies and start both servers. Your browser should open to `http://localhost:3000`.
 
-```
+## 📋 Manual Installation & Setup
+
+### Prerequisites
+- **Python 3.8+** - [Download from python.org](https://www.python.org/downloads/)
+- **Node.js 16+** - [Download from nodejs.org](https://nodejs.org/)
+- **Git** - [Download from git-scm.com](https://git-scm.com/)
+
+### Step 1: Clone and Setup Backend
+
+```bash
+# Clone the repository
+git clone <repository-url>
+cd profai
+
+# Create and activate virtual environment
+# On Windows:
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# On macOS/Linux:
+python -m venv .venv
+source .venv/bin/activate
+
+# Install Python dependencies
 pip install -r requirements.txt
 ```
 
-3) Configure environment:
+### Step 2: Configure Environment (Optional)
 
-```
+Create a `.env` file in the root directory for API keys:
+
+```bash
+# Copy example (if exists) or create new .env file
+# Windows:
 copy .env.example .env
-# Edit .env and fill OPENAI_API_KEY and ELEVENLABS_API_KEY
+
+# macOS/Linux:
+cp .env.example .env
 ```
 
-4) Run the CLI for a text ➜ LLM ➜ speech round-trip (no keys needed in fake mode):
-
-```
-$env:PROFAI_DEV_FAKE='1'; $env:PYTHONPATH="src"; python -m profai.cli "What is photosynthesis?" --emotion neutral
-```
-
-5) Or run the API server:
-
-```
-$env:PROFAI_DEV_FAKE='1'; uvicorn profai.server:app --app-dir src --reload
+Edit `.env` and add your API keys:
+```env
+OPENAI_API_KEY=your_openai_key_here
+ELEVENLABS_API_KEY=your_elevenlabs_key_here
+ELEVENLABS_VOICE=Bella
 ```
 
-Then POST to /ask with JSON like:
+**Note:** API keys are optional for development. The app runs in "fake mode" by default for testing without external API costs.
+
+### Step 3: Setup Frontend
+
+```bash
+# Navigate to frontend directory
+cd frontend
+
+# Install Node.js dependencies
+npm install
+
+# Return to root directory
+cd ..
+```
+
+## 🏃‍♂️ Running the Application
+
+### Method 1: Full Stack Launcher (Recommended)
+
+```bash
+# From the root directory:
+python start_fullstack.py
+```
+
+This starts both servers and opens your browser automatically.
+
+### Method 2: Manual Server Start
+
+**Terminal 1 - Backend Server:**
+```bash
+# Set environment and start FastAPI server
+set PYTHONPATH=src              # Windows
+export PYTHONPATH=src           # macOS/Linux
+
+uvicorn profai.server:app --reload --host 0.0.0.0 --port 8000
+```
+
+**Terminal 2 - Frontend Server:**
+```bash
+cd frontend
+npm start
+```
+
+### Method 3: Command Line Interface Only
+
+For backend-only usage:
+```bash
+# Set environment
+set PROFAI_DEV_FAKE=1           # Windows
+export PROFAI_DEV_FAKE=1        # macOS/Linux
+
+set PYTHONPATH=src              # Windows  
+export PYTHONPATH=src           # macOS/Linux
+
+# Ask a question via CLI
+python -m profai.cli "What is machine learning?" --emotion neutral
+```
+
+## 🌐 Accessing the Application
+
+Once running, you can access:
+
+- **🖥️ Frontend UI**: http://localhost:3000
+- **📊 Backend API**: http://localhost:8000
+- **📝 API Documentation**: http://localhost:8000/docs
+
+## 🎯 Features Guide
+
+### Voice Chat
+- Click the microphone button to start recording
+- Speak your question and click again to stop
+- ProfAI responds with both text and audio
+
+### YouTube Curricula
+1. Switch to the "YouTube Curricula" tab
+2. Enter a YouTube playlist URL
+3. The system will process videos into chapters
+4. Read transcripts, take quizzes, and track progress
+
+### Smart Reading Assistant
+- Select any confusing text to get instant explanations
+- Get simplified explanations and context
+
+### Code Playground
+- Interactive coding environment
+- Test code snippets while learning
+
+## 🛠️ Development Mode
+
+For development without API costs, the app runs in "fake mode" by default:
+
+```bash
+# Explicitly enable fake mode
+set PROFAI_DEV_FAKE=1           # Windows
+export PROFAI_DEV_FAKE=1        # macOS/Linux
+```
+
+This simulates API responses without making actual calls to OpenAI or ElevenLabs.
+
+## 📁 Project Structure
 
 ```
-{
-	"text": "Explain Newton's second law simply",
-	"emotion": "confused",
-	"play_audio": false
-}
+profai/
+├── frontend/                   # React frontend application
+│   ├── src/
+│   │   ├── App.js             # Main app component
+│   │   ├── components/        # Reusable components
+│   │   └── *.js               # Feature components
+│   └── package.json
+├── src/profai/                # Python backend
+│   ├── server.py              # FastAPI server
+│   ├── cli.py                 # Command line interface
+│   ├── llm.py                 # LLM integration
+│   ├── tts.py                 # Text-to-speech
+│   ├── stt.py                 # Speech-to-text
+│   └── *.py                   # Other modules
+├── scripts/                   # Utility scripts
+├── start_fullstack.py         # Full stack launcher
+├── start_fullstack.bat        # Windows batch launcher
+└── requirements.txt           # Python dependencies
 ```
 
-Audio files are saved under `outputs/`.
+## 🧪 Testing
 
-## Notes
-- This is the Phase 1 foundation. SER (emotion from voice) and streaming are slated for Phase 2.
-- Set ELEVENLABS_VOICE to any available voice name or ID. Default is `Bella`.
- - Dev mode: set `PROFAI_DEV_FAKE=1` to bypass external APIs. Use `scripts/smoke_test.py` to verify a full loop without keys.
- - STT: Use `/stt` with `{ "file_path": "path/to/audio.wav" }` in fake mode now; real transcription requires a valid `OPENAI_API_KEY`.
- - Microphone (prototype): run `scripts/mic_chat.py` to record 5s audio and then type your question; we’ll wire mic→STT next.
+Test the installation:
+
+```bash
+# Test CLI functionality
+python scripts/smoke_test.py
+
+# Test voice pipeline
+python scripts/voice_pipeline_test.py
+
+# Test individual components
+python scripts/quick_test.py
+```
+
+## ❓ Troubleshooting
+
+### Common Issues
+
+**"Node.js not found"**
+- Install Node.js from [nodejs.org](https://nodejs.org/)
+- Restart your terminal after installation
+
+**"Python module not found"**
+- Ensure virtual environment is activated
+- Check that `PYTHONPATH=src` is set
+
+**"Port already in use"**
+- Stop existing servers: `Ctrl+C` in terminals
+- Or change ports in the configuration
+
+**Frontend won't start**
+- Try deleting `frontend/node_modules` and run `npm install` again
+- Check Node.js version: `node --version` (needs 16+)
+
+**API calls failing**
+- Check if backend is running on port 8000
+- Verify `.env` file configuration for production mode
+
+### Getting Help
+
+1. Check the [troubleshooting scripts](scripts/) for automated testing
+2. Review the API docs at http://localhost:8000/docs when server is running
+3. Check console logs in browser developer tools
+
+## 🔧 Configuration Options
+
+### Environment Variables
+
+- `PROFAI_DEV_FAKE`: Set to '1' for development mode (no API calls)
+- `OPENAI_API_KEY`: Your OpenAI API key for GPT models
+- `ELEVENLABS_API_KEY`: Your ElevenLabs API key for voice synthesis
+- `ELEVENLABS_VOICE`: Voice name/ID for TTS (default: "Bella")
+
+### Audio Settings
+
+Audio files are automatically saved to the `outputs/` directory.
+
+## 📝 Notes
+
+- **Development Phase**: This is a Phase 1 implementation focused on core functionality
+- **API Costs**: Use fake mode for development to avoid API charges
+- **Voice Features**: Real-time emotion detection and streaming planned for Phase 2
+- **Browser Compatibility**: Tested on Chrome, Firefox, Safari, and Edge

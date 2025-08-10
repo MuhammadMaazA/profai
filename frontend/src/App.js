@@ -557,14 +557,6 @@ function App() {
       {/* Tab Content */}
       {activeTab === 'chat' && (
         <div className="chat-container">
-          {/* Learning Path Indicator */}
-          <div className="learning-path-indicator" data-path={learningPath}>
-            <div className="path-info">
-              {React.createElement(LEARNING_PATHS[learningPath].icon, { size: 16 })}
-              <span className="path-name">{LEARNING_PATHS[learningPath].name} Mode</span>
-              <span className="path-description">{LEARNING_PATHS[learningPath].description}</span>
-            </div>
-          </div>
           
         <div className="chat-messages">
           {messages.map((message, index) => (
