@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Send, BookOpen, Code, Zap, MessageCircle, Youtube, VolumeX, Volume2 } from 'lucide-react';
+import { Mic, MicOff, Send, BookOpen, Code, Zap, MessageCircle, Youtube, VolumeX, Volume2, Square } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import PlaylistCurriculumManager from './PlaylistCurriculumManager';
@@ -76,6 +76,24 @@ function App() {
         console.error('❌ Audio playback failed:', error);
         currentAudioRef.current = null;
       });
+    }
+  };
+
+  const stopAudio = () => {
+    if (currentAudioRef.current) {
+      currentAudioRef.current.pause();
+      currentAudioRef.current.currentTime = 0;
+      currentAudioRef.current = null;
+    }
+  };
+
+  const toggleMute = () => {
+    const newMuteState = !isAudioMuted;
+    setIsAudioMuted(newMuteState);
+    
+    // If muting, stop any currently playing audio
+    if (newMuteState) {
+      stopAudio();
     }
   };
 
@@ -425,11 +443,19 @@ function App() {
           <div className="header-controls">
             <button 
               className="control-button"
-              onClick={() => setIsAudioMuted(!isAudioMuted)}
+              onClick={toggleMute}
               title={isAudioMuted ? "Unmute AI Audio" : "Mute AI Audio"}
             >
               {isAudioMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
               {isAudioMuted ? 'Unmute' : 'Mute'}
+            </button>
+            <button 
+              className="control-button"
+              onClick={stopAudio}
+              title="Stop Current Audio"
+            >
+              <Square size={18} />
+              Stop
             </button>
             <button 
               className="control-button"

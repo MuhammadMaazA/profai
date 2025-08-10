@@ -3,7 +3,7 @@ import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import { 
   BookOpen, Clock, Trophy, PlayCircle, CheckCircle, Target, Users, Plus, Upload, Trash2, Eye,
-  Youtube, Brain, Play, Check, ArrowLeft
+  Youtube, Brain, Play, Check, ArrowLeft, X, RotateCcw
 } from 'lucide-react';
 import PersonalizedQuiz from './PersonalizedQuiz';
 import ConfusionDetector from './ConfusionDetector';
@@ -27,6 +27,12 @@ const PlaylistCurriculumManager = () => {
   const [confusionDetectionActive, setConfusionDetectionActive] = useState(true);
   const [useSmartReading, setUseSmartReading] = useState(true);
   const [confusionAlert, setConfusionAlert] = useState(null);
+  
+  // Flashcard modal state
+  const [showFlashcardModal, setShowFlashcardModal] = useState(false);
+  const [currentFlashcardIndex, setCurrentFlashcardIndex] = useState(0);
+  const [showFlashcardAnswer, setShowFlashcardAnswer] = useState(false);
+  const [flashcardStats, setFlashcardStats] = useState({ again: 0, hard: 0, good: 0, easy: 0 });
   
   // Ref for chapter content to track reading position
   const chapterContentRef = useRef(null);
@@ -199,6 +205,56 @@ const PlaylistCurriculumManager = () => {
     }
   };
 
+  // Flashcard modal functions
+  const openFlashcardModal = (flashcards, startIndex = 0) => {
+    if (!flashcards || flashcards.length === 0) return;
+    setCurrentFlashcardIndex(startIndex);
+    setShowFlashcardAnswer(false);
+    setShowFlashcardModal(true);
+  };
+  
+  const closeFlashcardModal = () => {
+    setShowFlashcardModal(false);
+    setCurrentFlashcardIndex(0);
+    setShowFlashcardAnswer(false);
+  };
+  
+  const revealAnswer = () => {
+    setShowFlashcardAnswer(true);
+  };
+  
+  const handleFlashcardRating = (rating) => {
+    // Update stats
+    setFlashcardStats(prev => ({
+      ...prev,
+      [rating]: prev[rating] + 1
+    }));
+    
+    // Move to next card or close modal
+    nextFlashcard();
+  };
+  
+  const nextFlashcard = () => {
+    if (selectedChapter && selectedChapter.flashcards && currentFlashcardIndex < selectedChapter.flashcards.length - 1) {
+      setCurrentFlashcardIndex(currentFlashcardIndex + 1);
+      setShowFlashcardAnswer(false);
+    } else {
+      // End of deck - show summary
+      const total = flashcardStats.again + flashcardStats.hard + flashcardStats.good + flashcardStats.easy;
+      if (total > 0) {
+        alert(`Flashcard session complete!\n\nStats:\n✓ Easy: ${flashcardStats.easy}\n✓ Good: ${flashcardStats.good}\n⚠ Hard: ${flashcardStats.hard}\n✗ Again: ${flashcardStats.again}`);
+      }
+      closeFlashcardModal();
+    }
+  };
+  
+  const prevFlashcard = () => {
+    if (currentFlashcardIndex > 0) {
+      setCurrentFlashcardIndex(currentFlashcardIndex - 1);
+      setShowFlashcardAnswer(false);
+    }
+  };
+
   const deleteCurriculum = async (curriculumId) => {
     if (!window.confirm('Are you sure you want to delete this curriculum?')) return;
     
@@ -331,10 +387,23 @@ const PlaylistCurriculumManager = () => {
 
             {selectedChapter.flashcards && selectedChapter.flashcards.length > 0 && (
               <div className="chapter-section">
-                <h2>🧠 Flashcards ({selectedChapter.flashcards.length})</h2>
+                <div className="section-header">
+                  <h2>🧠 Flashcards ({selectedChapter.flashcards.length})</h2>
+                  <button 
+                    className="study-all-btn"
+                    onClick={() => openFlashcardModal(selectedChapter.flashcards, 0)}
+                  >
+                    <Brain size={16} />
+                    Study All
+                  </button>
+                </div>
                 <div className="flashcards-grid">
                   {selectedChapter.flashcards.map((card, index) => (
-                    <div key={card.id} className="flashcard-preview">
+                    <div 
+                      key={card.id} 
+                      className="flashcard-preview"
+                      onClick={() => openFlashcardModal(selectedChapter.flashcards, index)}
+                    >
                       <div className="flashcard-header">
                         <span className="flashcard-number">#{index + 1}</span>
                         <span className={`difficulty-badge difficulty-${card.difficulty}`}>
@@ -346,7 +415,7 @@ const PlaylistCurriculumManager = () => {
                           <strong>Q:</strong> {card.question}
                         </div>
                         <div className="answer">
-                          <strong>A:</strong> {card.answer}
+                          <strong>A:</strong> {card.answer.length > 100 ? card.answer.substring(0, 100) + '...' : card.answer}
                         </div>
                       </div>
                       {card.tags && card.tags.length > 0 && (
