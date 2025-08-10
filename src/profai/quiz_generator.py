@@ -52,10 +52,9 @@ class PersonalizedQuizGenerator:
             difficulty_preference
         )
         
-        # Generate quiz using LLM
-        quiz_response = self.llm.generate(
+        # Generate quiz using LLM with higher token limit for complete quiz
+        quiz_response = self.llm.generate_quiz(
             user_text=quiz_prompt,
-            learning_path=None,
             temperature=0.7
         )
         
@@ -76,25 +75,40 @@ class PersonalizedQuizGenerator:
         weak_areas_text = f"Focus extra attention on these areas where the user struggles: {', '.join(weak_areas)}" if weak_areas else ""
         
         return f"""
-Generate a personalized adaptive quiz for the chapter: "{title}"
+Generate a content-based quiz for the chapter: "{title}"
 
 CHAPTER CONTENT:
 {content[:2000]}...
 
 QUIZ REQUIREMENTS:
-- Generate 5-8 questions of varying difficulty
-- Include multiple choice questions (4 options each)
+- Generate 5-8 multiple choice questions DIRECTLY about the content
+- Each question must test knowledge of specific facts, concepts, or procedures from the chapter
+- Include 4 options each (A, B, C, D)
 - {weak_areas_text}
 - Mix difficulty levels: {difficulty}
-- Focus on practical application and conceptual understanding
+- Questions should be about WHAT was taught, not reflective questions
+- Focus on definitions, formulas, steps, examples, and specific information from the content
 - Include detailed explanations for each answer
+
+JSON FORMATTING RULES:
+- Use only basic ASCII characters in questions and explanations
+- Replace mathematical symbols: use >= instead of ≥, <= instead of ≤
+- Avoid angle brackets < > and HTML tags
+- Escape all quotes in text with backslash
+- Use simple mathematical notation without special Unicode symbols
+
+EXAMPLE GOOD QUESTIONS:
+- "What is the definition of [concept from content]?"
+- "According to the chapter, which formula is used to calculate [specific thing]?"
+- "What are the three steps mentioned for [specific process]?"
+- "Which example was given to illustrate [specific concept]?"
 
 RESPONSE FORMAT (JSON):
 {{
   "questions": [
     {{
       "id": "q1",
-      "question": "Clear, specific question text",
+      "question": "Clear, specific question about content",
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correct_answer": 0,
       "explanation": "Detailed explanation of why this is correct",
@@ -125,21 +139,100 @@ Generate the quiz now:
     
     def _parse_quiz_response(self, response: str) -> List[QuizQuestion]:
         """Parse LLM response into structured quiz questions with robust error handling"""
+        print(f"Full LLM response length: {len(response)}")
+        print(f"Full LLM response: {response}")
+        print("=" * 50)
+        
         try:
-            # Extract JSON from response
+            # Extract JSON from response with better bracket matching
             json_start = response.find('{')
-            json_end = response.rfind('}') + 1
-            if json_start == -1 or json_end == 0:
+            if json_start == -1:
                 print("No JSON found in response")
                 return self._generate_fallback_quiz()
+            
+            # Find the matching closing brace by counting brackets
+            bracket_count = 0
+            json_end = -1
+            for i in range(json_start, len(response)):
+                if response[i] == '{':
+                    bracket_count += 1
+                elif response[i] == '}':
+                    bracket_count -= 1
+                    if bracket_count == 0:
+                        json_end = i + 1
+                        break
+            
+            if json_end == -1:
+                print("No matching closing brace found, trying to complete JSON")
+                # Try to find incomplete JSON and complete it
+                json_str = response[json_start:]
                 
-            json_str = response[json_start:json_end]
+                # Check for unterminated strings and complete them
+                in_string = False
+                escape_next = False
+                completed_json = ""
+                
+                for i, char in enumerate(json_str):
+                    if escape_next:
+                        completed_json += char
+                        escape_next = False
+                        continue
+                    
+                    if char == '\\':
+                        escape_next = True
+                        completed_json += char
+                        continue
+                    
+                    if char == '"':
+                        in_string = not in_string
+                        completed_json += char
+                    else:
+                        completed_json += char
+                
+                # If we're still in a string at the end, close it
+                if in_string:
+                    completed_json += '"'
+                
+                # Add missing closing brackets
+                open_braces = completed_json.count('{') - completed_json.count('}')
+                open_brackets = completed_json.count('[') - completed_json.count(']')
+                
+                # If we're in the middle of a question object, try to close it properly
+                if '{"id":' in completed_json[-100:] and completed_json.strip().endswith('"'):
+                    # We're likely in an incomplete question, remove the incomplete part
+                    # Find the last complete question
+                    last_complete = completed_json.rfind('    },')
+                    if last_complete != -1:
+                        completed_json = completed_json[:last_complete + 6]  # Keep the },
+                
+                json_str = completed_json + ']' * open_brackets + '}' * open_braces
+            else:
+                json_str = response[json_start:json_end]
             
             # Clean up common JSON issues
             import re
+            # Remove HTML tags first (like <sup>, <sub>, etc.)
+            json_str = re.sub(r'<[^>]+>', '', json_str)
+            
+            # Handle mathematical symbols and special characters that break JSON
+            json_str = json_str.replace('≥', '>=')  # Replace unicode greater-than-or-equal
+            json_str = json_str.replace('≤', '<=')  # Replace unicode less-than-or-equal
+            json_str = json_str.replace('∞', 'infinity')  # Replace infinity symbol
+            json_str = json_str.replace('∈', 'in')  # Replace element-of symbol
+            json_str = json_str.replace('∀', 'for all')  # Replace for-all symbol
+            json_str = json_str.replace('∃', 'there exists')  # Replace exists symbol
+            
+            # Replace angle brackets that might be interpreted as HTML
+            json_str = re.sub(r'<([^>]*?)>', r'(\\1)', json_str)  # Replace <x,y> with (x,y)
+            
+            # Fix common JSON syntax issues
             json_str = re.sub(r',\s*}', '}', json_str)  # Remove trailing commas before }
             json_str = re.sub(r',\s*]', ']', json_str)  # Remove trailing commas before ]
-            json_str = json_str.replace("'", '"')  # Replace single quotes with double quotes
+            
+            # Handle unescaped quotes - simple approach
+            # Replace smart quotes with regular quotes first
+            json_str = json_str.replace('"', '"').replace('"', '"')
+            json_str = json_str.replace(''', "'").replace(''', "'")
             
             print(f"Attempting to parse JSON: {json_str[:200]}...")
             quiz_data = json.loads(json_str)

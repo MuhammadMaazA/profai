@@ -132,6 +132,64 @@ class LLMClient:
             print(f"Error in LLM generate: {e}")
             return "I'm having trouble processing your question right now. Please try again, or rephrase your question."
 
+    def generate_quiz(
+        self, 
+        user_text: str, 
+        temperature: float = 0.7
+    ) -> str:
+        """Generate quiz content with higher token limits for complete JSON responses"""
+        
+        # Build specialized system prompt for quiz generation
+        system_prompt = """You are ProfAI, an expert educational assistant that creates high-quality quizzes. 
+You generate JSON-formatted quizzes that test specific content knowledge with detailed explanations.
+Always respond with valid JSON only, no additional text or formatting."""
+        
+        if self.dev_fake:
+            return f"[FAKE QUIZ] Generated quiz for: {user_text[:100]}..."
+        
+        try:
+            if self.use_gemini:
+                prompt = f"{system_prompt}\n\nQuiz Request: {user_text}\n\nGenerate the quiz in JSON format:"
+                
+                generation_config = {
+                    'temperature': temperature,
+                    'max_output_tokens': 2048,  # Much higher limit for complete quiz
+                    'top_p': 0.8,
+                    'top_k': 40
+                }
+                
+                response = self.client.generate_content(
+                    prompt,
+                    generation_config=generation_config
+                )
+                
+                # Handle the response properly
+                if hasattr(response, 'text') and response.text:
+                    return response.text.strip()
+                elif hasattr(response, 'candidates') and response.candidates:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, 'content') and candidate.content:
+                        if hasattr(candidate.content, 'parts') and candidate.content.parts:
+                            return candidate.content.parts[0].text.strip()
+                
+                return "I apologize, but I couldn't generate a quiz. Please try again."
+            else:
+                # OpenAI API with higher token limit for quiz
+                resp = self.client.chat.completions.create(  # type: ignore[union-attr]
+                    model=self.model,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_text},
+                    ],
+                    temperature=temperature,
+                    max_tokens=2048,  # Much higher limit for complete quiz
+                    top_p=0.8
+                )
+                return (resp.choices[0].message.content or "").strip()
+        except Exception as e:
+            print(f"Error in LLM generate_quiz: {e}")
+            return "I'm having trouble generating a quiz right now. Please try again."
+
     def generate_lesson_content(
         self,
         lesson_id: str,

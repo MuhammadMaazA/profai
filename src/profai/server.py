@@ -396,7 +396,8 @@ async def voice_chat_endpoint(audio_file: UploadFile = File(...), language: str 
         # Step 1: Transcribe audio with language support
         transcription_result = stt.transcribe_file(tmp_file_path, language=language if language != "en" else None)
         transcription = transcription_result["text"] if isinstance(transcription_result, dict) else transcription_result
-        detected_language = transcription_result.get("language", language) if isinstance(transcription_result, dict) else language
+        # Use the original language parameter for TTS, don't auto-detect unless specifically requested
+        detected_language = language  # Use provided language instead of auto-detection
         
         # Clean up temp file
         os.unlink(tmp_file_path)
