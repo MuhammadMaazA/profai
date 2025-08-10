@@ -200,3 +200,15 @@ class LLMClient:
         
         language_name = language_names.get(language, language.upper())
         return f"Please respond in {language_name}. Provide a clear, educational explanation in {language_name}."
+
+
+# Utility function for simple LLM responses
+def get_llm_response(prompt: str, temperature: float = 0.3) -> str:
+    """Simple utility function to get an LLM response"""
+    try:
+        client = LLMClient()
+        response = client.generate(user_text=prompt, temperature=temperature)
+        return response
+    except Exception as e:
+        print(f"Error generating LLM response: {e}")
+        return "I apologize, but I couldn't generate a detailed explanation at the moment. Please try asking a specific question about what's confusing you."

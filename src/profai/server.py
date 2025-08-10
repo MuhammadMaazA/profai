@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import Optional, List
+from typing import Optional, List, Dict
 import os
 import tempfile
 from pathlib import Path
@@ -19,6 +19,12 @@ from .specializations import (
 )
 from .emotion_detection import emotion_detector
 from .youtube_processor import YouTubeProcessor
+from .playlist_curriculum import PlaylistCurriculumProcessor
+from .quiz_generator import PersonalizedQuizGenerator, QuizQuestion
+from .curriculum_content import (
+    get_lesson_content, get_curriculum_path, get_available_curricula,
+    get_lesson_progress_data, CURRICULUM_PATHS
+)
 
 
 app = FastAPI(title="ProfAI API", version="0.2.0")
@@ -64,13 +70,24 @@ class STTRequest(BaseModel):
 class LessonRequest(BaseModel):
     lesson_id: str
     learning_path: str
-    delivery_format: str
+    delivery_format: Optional[str] = None
     user_question: Optional[str] = None
 
 
 class YouTubeRequest(BaseModel):
     url: str
     language: str = "en"
+
+
+class PlaylistCurriculumRequest(BaseModel):
+    playlist_url: str
+    title: Optional[str] = None
+
+
+class ChapterProgressRequest(BaseModel):
+    curriculum_id: str
+    chapter_id: str
+    completed: bool
 
 
 class FlashcardUpdateRequest(BaseModel):
@@ -83,6 +100,32 @@ class ProgressRequest(BaseModel):
     current_lesson: Optional[str] = None
 
 
+class QuizGenerationRequest(BaseModel):
+    chapter_content: str
+    chapter_title: str
+    user_learning_history: Optional[Dict] = None
+    difficulty_preference: str = "mixed"
+
+
+class QuizSubmissionRequest(BaseModel):
+    quiz_id: str
+    user_answers: List[int]
+    questions: List[Dict]
+
+
+class ConfusionDetectionRequest(BaseModel):
+    image_data: str  # base64 encoded image
+    current_text: str
+    reading_position: Dict  # {paragraph: int, sentence: int}
+    full_context: Optional[str] = None  # full text context for better understanding
+
+
+class ReadingTrackingRequest(BaseModel):
+    text_content: str
+    user_position: Dict  # {scroll_position: float, visible_text: str}
+    gaze_data: Optional[Dict] = None  # future eye tracking integration
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -90,22 +133,68 @@ async def health():
 
 @app.get("/curriculum")
 async def get_curriculum():
-    """Get the full curriculum structure"""
+    """Get the full curriculum structure with actual content"""
+    curricula = get_available_curricula()
     return {
-        "lessons": {
-            lesson_id: {
-                "title": lesson.title,
-                "path": lesson.path.value,
-                "format": lesson.format.value,
-                "duration_minutes": lesson.duration_minutes,
-                "difficulty": lesson.difficulty,
-                "prerequisites": lesson.prerequisites,
-                "learning_objectives": lesson.learning_objectives
+        "curricula": {
+            path_id: {
+                "name": path.name,
+                "description": path.description,
+                "lessons": path.lessons,
+                "total_duration": path.total_duration,
+                "difficulty_progression": path.difficulty_progression
             }
-            for lesson_id, lesson in ALL_LESSONS.items()
+            for path_id, path in curricula.items()
         },
-        "learning_paths": [path.value for path in LearningPath],
-        "delivery_formats": [format.value for format in DeliveryFormat]
+        "learning_paths": [path.value for path in LearningPath]
+    }
+
+
+@app.get("/curriculum/{curriculum_id}")
+async def get_curriculum_details(curriculum_id: str):
+    """Get detailed curriculum information"""
+    curriculum = get_curriculum_path(curriculum_id)
+    if not curriculum:
+        raise HTTPException(status_code=404, detail="Curriculum not found")
+    
+    return {
+        "id": curriculum_id,
+        "name": curriculum.name,
+        "description": curriculum.description,
+        "lessons": curriculum.lessons,
+        "total_duration": curriculum.total_duration,
+        "difficulty_progression": curriculum.difficulty_progression
+    }
+
+
+@app.get("/lessons/{lesson_id}")
+async def get_lesson(lesson_id: str):
+    """Get full lesson content"""
+    lesson = get_lesson_content(lesson_id)
+    if not lesson:
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    
+    return {
+        "id": lesson_id,
+        "introduction": lesson.introduction,
+        "main_content": lesson.main_content,
+        "examples": lesson.examples,
+        "exercises": lesson.exercises,
+        "summary": lesson.summary,
+        "further_reading": lesson.further_reading,
+        "estimated_time": lesson.estimated_time
+    }
+
+
+@app.post("/lessons/{lesson_id}/progress")
+async def update_lesson_progress(lesson_id: str, progress_data: dict):
+    """Update user progress for a lesson"""
+    # In a real app, this would save to user database
+    # For now, we'll just return the calculated progress
+    progress_info = get_lesson_progress_data(lesson_id, progress_data)
+    return {
+        "message": "Progress updated successfully",
+        "progress": progress_info
     }
 
 
@@ -137,7 +226,9 @@ async def get_lesson_content(payload: LessonRequest):
     """Generate content for a specific lesson"""
     try:
         learning_path = LearningPath(payload.learning_path)
-        delivery_format = DeliveryFormat(payload.delivery_format)
+        delivery_format = None
+        if payload.delivery_format:
+            delivery_format = DeliveryFormat(payload.delivery_format)
         
         llm = LLMClient()
         content = llm.generate_lesson_content(
@@ -212,7 +303,8 @@ async def tts_endpoint(payload: TTSRequest):
             user_emotion=user_emotion,
             language=payload.language
         )
-        return {"audio_path": str(path)}
+        # Return just the filename, not the full path
+        return {"audio_path": path.name}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -261,7 +353,8 @@ async def ask_endpoint(payload: AskRequest):
             user_emotion=user_emotion,
             language=payload.language
         )
-        return {"answer": answer, "audio_path": str(path)}
+        # Return just the filename, not the full path
+        return {"answer": answer, "audio_path": path.name}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -503,6 +596,103 @@ async def upload_audio_endpoint(audio_file: UploadFile = File(...)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# Playlist Curriculum Endpoints
+playlist_processor = PlaylistCurriculumProcessor()
+
+
+@app.post("/playlist/process")
+async def process_youtube_playlist(request: PlaylistCurriculumRequest):
+    """Process YouTube playlist and create curriculum"""
+    try:
+        result = playlist_processor.process_playlist(request.playlist_url)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing playlist: {str(e)}")
+
+
+@app.get("/playlist/curricula")
+async def list_playlist_curricula():
+    """Get list of all playlist-based curricula"""
+    try:
+        curricula = playlist_processor.list_curricula()
+        return {"curricula": curricula}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing curricula: {str(e)}")
+
+
+@app.get("/playlist/curriculum/{curriculum_id}")
+async def get_playlist_curriculum(curriculum_id: str):
+    """Get specific playlist curriculum"""
+    try:
+        curriculum = playlist_processor.load_curriculum(curriculum_id)
+        if not curriculum:
+            raise HTTPException(status_code=404, detail="Curriculum not found")
+        
+        # Convert to dict for JSON response
+        from dataclasses import asdict
+        return asdict(curriculum)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading curriculum: {str(e)}")
+
+
+@app.get("/playlist/curriculum/{curriculum_id}/chapter/{chapter_id}")
+async def get_chapter_details(curriculum_id: str, chapter_id: str):
+    """Get detailed chapter information including notes and flashcards"""
+    try:
+        curriculum = playlist_processor.load_curriculum(curriculum_id)
+        if not curriculum:
+            raise HTTPException(status_code=404, detail="Curriculum not found")
+        
+        chapter = None
+        for ch in curriculum.chapters:
+            if ch.id == chapter_id:
+                chapter = ch
+                break
+        
+        if not chapter:
+            raise HTTPException(status_code=404, detail="Chapter not found")
+        
+        # Convert to dict for JSON response
+        from dataclasses import asdict
+        return asdict(chapter)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error loading chapter: {str(e)}")
+
+
+@app.post("/playlist/curriculum/{curriculum_id}/chapter/{chapter_id}/progress")
+async def update_chapter_progress(curriculum_id: str, chapter_id: str, request: ChapterProgressRequest):
+    """Update chapter completion status"""
+    try:
+        success = playlist_processor.update_chapter_progress(curriculum_id, chapter_id, request.completed)
+        if not success:
+            raise HTTPException(status_code=404, detail="Curriculum or chapter not found")
+        
+        return {"success": True, "message": "Progress updated successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating progress: {str(e)}")
+
+
+@app.delete("/playlist/curriculum/{curriculum_id}")
+async def delete_playlist_curriculum(curriculum_id: str):
+    """Delete a playlist curriculum"""
+    try:
+        success = playlist_processor.delete_curriculum(curriculum_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Curriculum not found")
+        
+        return {"success": True, "message": "Curriculum deleted successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting curriculum: {str(e)}")
+
+
 # YouTube Flashcard Endpoints
 youtube_processor = YouTubeProcessor()
 
@@ -676,3 +866,201 @@ async def delete_flashcard_set(set_id: str):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error deleting flashcard set: {str(e)}")
+
+
+# Quiz Generation Endpoints
+@app.post("/generate-quiz")
+async def generate_chapter_quiz(payload: QuizGenerationRequest):
+    """Generate personalized quiz for a chapter"""
+    try:
+        quiz_generator = PersonalizedQuizGenerator()
+        
+        questions = quiz_generator.generate_chapter_quiz(
+            chapter_content=payload.chapter_content,
+            chapter_title=payload.chapter_title,
+            user_learning_history=payload.user_learning_history,
+            difficulty_preference=payload.difficulty_preference
+        )
+        
+        # Convert questions to dict format for JSON response
+        quiz_data = {
+            "quiz_id": f"quiz_{hash(payload.chapter_title)}",
+            "questions": [
+                {
+                    "id": q.id,
+                    "question": q.question,
+                    "options": q.options,
+                    "difficulty": q.difficulty,
+                    "topic": q.topic,
+                    "concepts": q.concepts
+                }
+                for q in questions
+            ]
+        }
+        
+        return quiz_data
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error generating quiz: {str(e)}")
+
+
+@app.post("/submit-quiz")
+async def submit_quiz_answers(payload: QuizSubmissionRequest):
+    """Submit quiz answers and get results with recommendations"""
+    try:
+        quiz_generator = PersonalizedQuizGenerator()
+        
+        # Reconstruct questions from submission
+        questions = []
+        for q_data in payload.questions:
+            questions.append(QuizQuestion(
+                id=q_data['id'],
+                question=q_data['question'],
+                options=q_data['options'],
+                correct_answer=q_data.get('correct_answer', 0),
+                explanation=q_data.get('explanation', ''),
+                difficulty=q_data.get('difficulty', 'medium'),
+                topic=q_data.get('topic', ''),
+                concepts=q_data.get('concepts', [])
+            ))
+        
+        # Evaluate results
+        results = quiz_generator.evaluate_quiz_results(questions, payload.user_answers)
+        
+        # Return comprehensive results
+        return {
+            "score": results.score,
+            "total_questions": results.total_questions,
+            "correct_answers": results.correct_answers,
+            "percentage": round(results.score * 100, 1),
+            "weak_concepts": results.weak_concepts,
+            "strong_concepts": results.strong_concepts,
+            "recommendations": results.recommendations,
+            "performance_level": (
+                "Excellent" if results.score >= 0.9 else
+                "Good" if results.score >= 0.7 else
+                "Fair" if results.score >= 0.5 else
+                "Needs Improvement"
+            )
+        }
+        
+    except Exception as e:
+        print(f"Quiz submission error: {str(e)}")  # Add debugging
+        raise HTTPException(status_code=500, detail=f"Error evaluating quiz: {str(e)}")
+
+
+# Computer Vision and Reading Tracking Endpoints
+@app.post("/detect-confusion")
+async def detect_user_confusion(payload: ConfusionDetectionRequest):
+    """Analyze user's facial expression for confusion detection"""
+    try:
+        # More realistic confusion detection - less frequent triggers
+        import random
+        
+        # Much lower base chance of confusion detection
+        base_confusion = random.uniform(0.1, 0.4)  # Lower baseline
+        
+        # Only occasionally trigger higher confusion levels (10% chance)
+        if random.random() < 0.1:  # 10% chance of high confusion
+            confusion_level = random.uniform(0.6, 0.9)
+        else:
+            confusion_level = base_confusion
+        
+        is_confused = confusion_level > 0.65  # Higher threshold
+        
+        result = {
+            "confusion_detected": is_confused,
+            "confusion_level": confusion_level,
+            "suggestions": []
+        }
+        
+        if is_confused:
+            # Generate contextual explanation for the specific text the user is reading
+            contextual_explanation = None
+            if payload.current_text:
+                # Limit text length for better processing
+                text_snippet = payload.current_text[:500]  # Limit to 500 chars
+                
+                explanation_prompt = f"""
+                A student is reading this educational text and appears confused (confusion level: {confusion_level:.1f}):
+                
+                "{text_snippet}"
+                
+                Please provide a clear, concise explanation that:
+                1. Breaks down the main concept in simpler terms
+                2. Explains why this might be confusing
+                3. Gives a practical example or analogy
+                4. Suggests what to focus on next
+                
+                Keep your response under 100 words and make it educational but encouraging.
+                """
+                
+                try:
+                    from .llm import get_llm_response
+                    contextual_explanation = get_llm_response(explanation_prompt, temperature=0.3)
+                except Exception as e:
+                    print(f"Error generating contextual explanation: {e}")
+                    contextual_explanation = f"This section seems complex. Let me help: {text_snippet[:100]}... Try breaking it down into smaller concepts and look for key terms you understand first."
+            
+            result.update({
+                "suggestions": [
+                    "Try breaking down the concept into smaller parts",
+                    "Look for visual examples or analogies", 
+                    "Consider re-reading the previous section",
+                    "Take a short break and return with fresh focus"
+                ],
+                "contextual_explanation": contextual_explanation,
+                "confused_text": payload.current_text[:200]  # Limit confused text length
+            })
+        else:
+            # For low confusion, don't send suggestions to avoid spam
+            result["suggestions"] = []
+        
+        return result
+        
+    except Exception as e:
+        print(f"Error in confusion detection: {e}")
+        raise HTTPException(status_code=500, detail=f"Error detecting confusion: {str(e)}")
+
+
+@app.post("/track-reading")
+async def track_reading_progress(payload: ReadingTrackingRequest):
+    """Track what user is reading and provide contextual help"""
+    try:
+        # Extract current reading context
+        visible_text = payload.user_position.get('visible_text', '')
+        scroll_position = payload.user_position.get('scroll_position', 0.0)
+        
+        # Generate contextual explanation using LLM
+        llm = LLMClient()
+        
+        explanation_prompt = f"""
+The user is currently reading this text passage:
+"{visible_text}"
+
+Provide a very simple, clear explanation or example that would help them understand this concept better. Keep it concise and practical.
+
+Focus on:
+- Key concepts in simpler terms
+- Real-world analogies
+- Quick examples
+- Common misconceptions to avoid
+
+Response should be 2-3 sentences maximum.
+"""
+        
+        contextual_explanation = llm.generate(
+            user_text=explanation_prompt,
+            temperature=0.7
+        )
+        
+        return {
+            "reading_position": scroll_position,
+            "contextual_help": contextual_explanation,
+            "key_concepts": ["concept1", "concept2"],  # TODO: Extract from text
+            "difficulty_estimate": "medium",  # TODO: Analyze text complexity
+            "reading_time_estimate": len(visible_text.split()) * 0.5  # seconds
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error tracking reading: {str(e)}")

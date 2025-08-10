@@ -1,8 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Send, BookOpen, Code, Zap, MessageCircle, Brain } from 'lucide-react';
+import { Mic, MicOff, Send, BookOpen, Code, Zap, MessageCircle, GraduationCap, Youtube } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
-import FlashcardDeck from './FlashcardDeck';
+import PlaylistCurriculumManager from './PlaylistCurriculumManager';
 import './index.css';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -12,12 +12,6 @@ const LEARNING_PATHS = {
   theory: { name: 'Theory', icon: BookOpen, description: 'AI fundamentals, algorithms, concepts' },
   tooling: { name: 'Tooling', icon: Code, description: 'Hands-on tools, coding, deployment' },
   hybrid: { name: 'Hybrid', icon: Zap, description: 'Theory + immediate application' }
-};
-
-const DELIVERY_FORMATS = {
-  micro_learning: { name: 'Quick Lessons', description: '5-10 minute focused lessons' },
-  deep_dive: { name: 'Deep Dive', description: 'Comprehensive tutorials' },
-  audio_lessons: { name: 'Audio Lessons', description: 'Podcast-style learning' }
 };
 
 const LANGUAGES = {
@@ -51,9 +45,7 @@ function App() {
   const [error, setError] = useState('');
   const [mediaRecorder, setMediaRecorder] = useState(null);
   const [showSettings, setShowSettings] = useState(false);
-  const [showCurriculum, setShowCurriculum] = useState(false);
   const [learningPath, setLearningPath] = useState('hybrid');
-  const [deliveryFormat, setDeliveryFormat] = useState('audio_lessons');
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [conversationHistory, setConversationHistory] = useState([]);
   const messagesEndRef = useRef(null);
@@ -89,7 +81,7 @@ function App() {
           // Update the welcome message with audio
           setMessages(prev => prev.map((msg, idx) => 
             idx === 0 && msg.type === 'ai' && msg.audioUrl === 'loading'
-              ? { ...msg, audioUrl: `${API_BASE_URL}/audio/${response.data.audio_path.split('/').pop()}` }
+              ? { ...msg, audioUrl: `${API_BASE_URL}/audio/${response.data.audio_path}` }
               : msg
           ));
         } else {
@@ -313,7 +305,6 @@ function App() {
         emotion: 'friendly',
         play_audio: false,
         learning_path: learningPath,
-        delivery_format: deliveryFormat,
         conversation_history: conversationHistory,
         language: selectedLanguage
       });
@@ -336,7 +327,7 @@ function App() {
         setTimeout(() => {
           setMessages(prev => prev.map((msg, idx) => 
             idx === prev.length - 1 && msg.type === 'ai' && msg.audioUrl === 'loading'
-              ? { ...msg, audioUrl: `${API_BASE_URL}/audio/${audio_path.split('/').pop()}` }
+              ? { ...msg, audioUrl: `${API_BASE_URL}/audio/${audio_path}` }
               : msg
           ));
         }, 100);
@@ -366,162 +357,6 @@ function App() {
     }
   };
 
-  // Curriculum browser component
-  const CurriculumBrowser = () => {
-    const [curriculum, setCurriculum] = useState(null);
-    const [selectedSubject, setSelectedSubject] = useState('');
-    const [loadingCurriculum, setLoadingCurriculum] = useState(false);
-
-    const fetchCurriculum = async () => {
-      setLoadingCurriculum(true);
-      try {
-        const response = await axios.get(`${API_BASE_URL}/curriculum`, {
-          params: { 
-            learning_path: learningPath,
-            subject: selectedSubject || undefined
-          }
-        });
-        
-        console.log('Curriculum API Response:', response.data);
-        
-        // Ensure lessons and recommendations are always arrays
-        const curriculumData = {
-          ...response.data,
-          lessons: Array.isArray(response.data.lessons) ? response.data.lessons : [],
-          recommendations: Array.isArray(response.data.recommendations) ? response.data.recommendations : []
-        };
-        
-        setCurriculum(curriculumData);
-      } catch (err) {
-        console.error('Error fetching curriculum:', err);
-        setError('Failed to load curriculum');
-      } finally {
-        setLoadingCurriculum(false);
-      }
-    };
-
-    const startLesson = async (lessonId) => {
-      try {
-        const response = await axios.post(`${API_BASE_URL}/lesson`, {
-          lesson_id: lessonId,
-          learning_path: learningPath,
-          delivery_format: deliveryFormat
-        });
-        
-        // Add lesson content as AI message
-        setMessages(prev => [...prev, {
-          type: 'ai',
-          content: response.data.content,
-          audioUrl: response.data.audio_path ? `${API_BASE_URL}/audio/${response.data.audio_path.split('/').pop()}` : null,
-          emotion: null
-        }]);
-        
-        setShowCurriculum(false);
-      } catch (err) {
-        console.error('Error starting lesson:', err);
-        setError('Failed to start lesson');
-      }
-    };
-
-    if (!curriculum) {
-      return (
-        <div className="curriculum-browser">
-          <div className="curriculum-header">
-            <h3>📚 Course Curriculum</h3>
-            <button onClick={() => setShowCurriculum(false)}>✕</button>
-          </div>
-          <div className="curriculum-controls">
-            <select 
-              value={selectedSubject} 
-              onChange={(e) => setSelectedSubject(e.target.value)}
-              className="subject-select"
-            >
-              <option value="">All Subjects</option>
-              <option value="machine_learning">Machine Learning</option>
-              <option value="python">Python Programming</option>
-              <option value="data_science">Data Science</option>
-              <option value="statistics">Statistics</option>
-              <option value="computer_science">Computer Science</option>
-            </select>
-            <button 
-              onClick={fetchCurriculum} 
-              disabled={loadingCurriculum}
-              className="fetch-button"
-            >
-              {loadingCurriculum ? 'Loading...' : 'Load Curriculum'}
-            </button>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="curriculum-browser">
-        <div className="curriculum-header">
-          <h3>📚 {curriculum.title || 'Course Curriculum'}</h3>
-          <button onClick={() => setShowCurriculum(false)}>✕</button>
-        </div>
-        
-        {curriculum.description && (
-          <p className="curriculum-description">{curriculum.description}</p>
-        )}
-
-        <div className="lessons-grid">
-          {curriculum.lessons && Array.isArray(curriculum.lessons) && curriculum.lessons.map((lesson, index) => (
-            <div key={lesson.id || index} className="lesson-card">
-              <div className="lesson-header">
-                <h4>{lesson.title || 'Untitled Lesson'}</h4>
-                <span className="lesson-difficulty">{lesson.difficulty || 'Unknown'}</span>
-              </div>
-              
-              <div className="lesson-meta">
-                <span className="lesson-duration">⏱️ {lesson.duration || 'N/A'}</span>
-                <span className="lesson-type">📝 {lesson.lesson_type || 'Lesson'}</span>
-              </div>
-              
-              <p className="lesson-description">{lesson.description || 'No description available'}</p>
-              
-              {lesson.objectives && Array.isArray(lesson.objectives) && (
-                <div className="lesson-objectives">
-                  <strong>Objectives:</strong>
-                  <ul>
-                    {lesson.objectives.map((obj, i) => (
-                      <li key={i}>{obj}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              
-              <button 
-                onClick={() => startLesson(lesson.id || lesson.title || `lesson-${index}`)}
-                className="start-lesson-button"
-              >
-                Start Lesson
-              </button>
-            </div>
-          ))}
-          
-          {/* Show message if no lessons or lessons is not an array */}
-          {(!curriculum.lessons || !Array.isArray(curriculum.lessons) || curriculum.lessons.length === 0) && (
-            <div className="no-lessons">
-              <p>No lessons available for this curriculum. Please try selecting a different subject or check back later.</p>
-            </div>
-          )}
-        </div>
-        
-        {curriculum.recommendations && Array.isArray(curriculum.recommendations) && (
-          <div className="recommendations">
-            <h4>📈 Recommended Next Steps</h4>
-            <ul>
-              {curriculum.recommendations.map((rec, index) => (
-                <li key={index}>{rec}</li>
-              ))}
-            </ul>
-          </div>
-        )}
-      </div>
-    );
-  };
   const EmotionBadge = ({ emotion }) => {
     if (!emotion) return null;
     
@@ -575,16 +410,9 @@ function App() {
         <div className="header-content">
           <div className="title-section">
             <h1>🎓 ProfAI</h1>
-            <p>Your AI Tutor with Voice Chat & Flashcards</p>
+            <p>Your AI Tutor with Voice Chat & YouTube Curricula</p>
           </div>
           <div className="header-controls">
-            <button 
-              className="control-button"
-              onClick={() => setShowCurriculum(true)}
-              title="Browse Curriculum"
-            >
-              📚 Curriculum
-            </button>
             <button 
               className="control-button"
               onClick={() => setShowSettings(!showSettings)}
@@ -606,11 +434,11 @@ function App() {
           AI Chat
         </button>
         <button 
-          className={`main-tab ${activeTab === 'flashcards' ? 'active' : ''}`}
-          onClick={() => setActiveTab('flashcards')}
+          className={`main-tab ${activeTab === 'playlists' ? 'active' : ''}`}
+          onClick={() => setActiveTab('playlists')}
         >
-          <Brain size={20} />
-          Flashcards
+          <Youtube size={20} />
+          YouTube Curricula
         </button>
       </div>
 
@@ -635,24 +463,6 @@ function App() {
               </div>
               <p className="path-description">
                 {LEARNING_PATHS[learningPath]?.description}
-              </p>
-            </div>
-
-            <div className="setting-group">
-              <label>Delivery Format:</label>
-              <select 
-                value={deliveryFormat} 
-                onChange={(e) => setDeliveryFormat(e.target.value)}
-                className="format-select"
-              >
-                {Object.entries(DELIVERY_FORMATS).map(([key, format]) => (
-                  <option key={key} value={key}>
-                    {format.name}
-                  </option>
-                ))}
-              </select>
-              <p className="format-description">
-                {DELIVERY_FORMATS[deliveryFormat]?.description}
               </p>
             </div>
 
@@ -684,16 +494,18 @@ function App() {
         </div>
       )}
 
-      {/* Curriculum Browser Overlay */}
-      {showCurriculum && (
-        <div className="curriculum-overlay">
-          <CurriculumBrowser />
-        </div>
-      )}
-
       {/* Tab Content */}
       {activeTab === 'chat' && (
         <div className="chat-container">
+          {/* Learning Path Indicator */}
+          <div className="learning-path-indicator" data-path={learningPath}>
+            <div className="path-info">
+              {React.createElement(LEARNING_PATHS[learningPath].icon, { size: 16 })}
+              <span className="path-name">{LEARNING_PATHS[learningPath].name} Mode</span>
+              <span className="path-description">{LEARNING_PATHS[learningPath].description}</span>
+            </div>
+          </div>
+          
         <div className="chat-messages">
           {messages.map((message, index) => (
             <div key={index} className={`message ${message.type}`}>
@@ -791,9 +603,9 @@ function App() {
       </div>
       )}
 
-      {/* Flashcard Tab Content */}
-      {activeTab === 'flashcards' && (
-        <FlashcardDeck />
+      {/* YouTube Curriculum Tab Content */}
+      {activeTab === 'playlists' && (
+        <PlaylistCurriculumManager />
       )}
     </div>
   );
