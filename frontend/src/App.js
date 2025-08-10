@@ -59,7 +59,49 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  // Generate audio for welcome message on component mount - DISABLED TO SAVE CREDITS
+  // Function to generate audio on demand
+  const generateAudioForMessage = async (messageIndex) => {
+    const message = messages[messageIndex];
+    if (!message || message.type !== 'ai' || message.audioUrl === 'loading') return;
+
+    // Update message state to show loading
+    setMessages(prev => prev.map((msg, idx) => 
+      idx === messageIndex 
+        ? { ...msg, audioUrl: 'loading' }
+        : msg
+    ));
+
+    try {
+      console.log('🔊 Generating audio for message:', message.content.substring(0, 50) + '...');
+      const response = await axios.post(`${API_BASE_URL}/tts`, {
+        text: message.content,
+        play_audio: false,
+      });
+
+      if (response.data.audio_path) {
+        console.log('✅ Audio generated successfully');
+        setMessages(prev => prev.map((msg, idx) => 
+          idx === messageIndex 
+            ? { ...msg, audioUrl: `${API_BASE_URL}/audio/${response.data.audio_path}` }
+            : msg
+        ));
+      } else {
+        console.warn('⚠️ No audio path returned');
+        setMessages(prev => prev.map((msg, idx) => 
+          idx === messageIndex 
+            ? { ...msg, audioUrl: null }
+            : msg
+        ));
+      }
+    } catch (error) {
+      console.error('❌ Error generating audio:', error);
+      setMessages(prev => prev.map((msg, idx) => 
+        idx === messageIndex 
+          ? { ...msg, audioUrl: null }
+          : msg
+      ));
+    }
+  };
   useEffect(() => {
     // Automatic welcome audio disabled to save API credits
     // Only generate TTS when user explicitly requests it
@@ -248,32 +290,12 @@ function App() {
       const aiMessage = {
         type: 'ai',
         content: aiResponse,
-        audioUrl: 'loading', // Show loading state initially
+        audioUrl: null, // No auto-generation, user clicks to generate
         emotion: detected_emotion
       };
       
       setMessages(prev => [...prev, aiMessage]);
       setConversationHistory(prev => [...prev, aiResponse]);
-
-      // If audio_url is available, update the message with the actual audio
-      if (audio_url) {
-        setTimeout(() => {
-          setMessages(prev => prev.map((msg, idx) => 
-            idx === prev.length - 1 && msg.type === 'ai' && msg.audioUrl === 'loading'
-              ? { ...msg, audioUrl: `${API_BASE_URL}${audio_url}` }
-              : msg
-          ));
-        }, 100); // Small delay to ensure message is rendered first
-      } else {
-        // If no audio URL, show unavailable after a short delay
-        setTimeout(() => {
-          setMessages(prev => prev.map((msg, idx) => 
-            idx === prev.length - 1 && msg.type === 'ai' && msg.audioUrl === 'loading'
-              ? { ...msg, audioUrl: null }
-              : msg
-          ));
-        }, 2000); // Show loading for 2 seconds then show unavailable
-      }
 
     } catch (err) {
       console.error('Error sending voice message:', err);
@@ -313,36 +335,16 @@ function App() {
 
       const { answer, audio_path } = response.data;
 
-      // Add AI response with loading audio state initially
+      // Add AI response with no audio initially
       const aiMessage = {
         type: 'ai',
         content: answer,
-        audioUrl: 'loading',
+        audioUrl: null, // No auto-generation, user clicks to generate
         emotion: null
       };
       
       setMessages(prev => [...prev, aiMessage]);
       setConversationHistory(prev => [...prev, answer]);
-
-      // If audio_path is available, update the message with the actual audio
-      if (audio_path) {
-        setTimeout(() => {
-          setMessages(prev => prev.map((msg, idx) => 
-            idx === prev.length - 1 && msg.type === 'ai' && msg.audioUrl === 'loading'
-              ? { ...msg, audioUrl: `${API_BASE_URL}/audio/${audio_path}` }
-              : msg
-          ));
-        }, 100);
-      } else {
-        // If no audio path, show unavailable after a short delay
-        setTimeout(() => {
-          setMessages(prev => prev.map((msg, idx) => 
-            idx === prev.length - 1 && msg.type === 'ai' && msg.audioUrl === 'loading'
-              ? { ...msg, audioUrl: null }
-              : msg
-          ));
-        }, 2000);
-      }
 
     } catch (err) {
       console.error('Error sending text message:', err);
@@ -517,35 +519,40 @@ function App() {
                 </div>
                 <div className="message-meta">
                   <EmotionBadge emotion={message.emotion} />
-                  {message.audioUrl && message.audioUrl !== 'loading' && (
-                    <div className="audio-player">
-                      <audio 
-                        controls
-                        onLoadedMetadata={(e) => {
-                          if (e.target.duration === 0 || isNaN(e.target.duration)) {
-                            console.warn('Audio file appears to be empty or corrupted');
-                          }
-                        }}
-                        onError={(e) => {
-                          console.warn('Audio playback error:', e);
-                        }}
-                      >
-                        <source src={message.audioUrl} type="audio/mpeg" />
-                        Your browser does not support the audio element.
-                      </audio>
-                      <div className="audio-status">
-                        {/* This will be populated by the onLoadedMetadata event if needed */}
-                      </div>
-                    </div>
-                  )}
-                  {message.audioUrl === 'loading' && (
-                    <div className="audio-loading">
-                      🎧 Generating audio...
-                    </div>
-                  )}
-                  {message.type === 'ai' && !message.audioUrl && (
-                    <div className="audio-unavailable">
-                      🔇 Audio not available
+                  {message.type === 'ai' && (
+                    <div className="audio-controls">
+                      {message.audioUrl === 'loading' ? (
+                        <div className="audio-loading">
+                          <span className="loading-spinner small"></span>
+                          🎧 Generating audio...
+                        </div>
+                      ) : message.audioUrl ? (
+                        <div className="audio-player">
+                          <audio 
+                            controls
+                            onLoadedMetadata={(e) => {
+                              if (e.target.duration === 0 || isNaN(e.target.duration)) {
+                                console.warn('Audio file appears to be empty or corrupted');
+                              }
+                            }}
+                            onError={(e) => {
+                              console.warn('Audio playback error:', e);
+                            }}
+                          >
+                            <source src={message.audioUrl} type="audio/mpeg" />
+                            Your browser does not support the audio element.
+                          </audio>
+                        </div>
+                      ) : (
+                        <button 
+                          className="btn btn-secondary btn-sm audio-generate-btn"
+                          onClick={() => generateAudioForMessage(index)}
+                          title="Generate and play audio for this response"
+                        >
+                          <span className="btn-icon">🔊</span>
+                          Play Audio
+                        </button>
+                      )}
                     </div>
                   )}
                 </div>

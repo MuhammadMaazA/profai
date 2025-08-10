@@ -12,16 +12,17 @@ import SmartReadingAssistant from './SmartReadingAssistant';
 const API_BASE_URL = 'http://localhost:8000';
 
 const PlaylistCurriculumManager = () => {
+  // State with localStorage persistence to prevent loss when switching tabs
   const [curricula, setCurricula] = useState([]);
   const [selectedCurriculum, setSelectedCurriculum] = useState(null);
   const [selectedChapter, setSelectedChapter] = useState(null);
-  const [activeView, setActiveView] = useState('overview'); // overview, curriculum, chapter, quiz
+  const [activeView, setActiveView] = useState('overview');
   const [newPlaylistUrl, setNewPlaylistUrl] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStatus, setProcessingStatus] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   
-  // New state for advanced features
+  // Advanced features state
   const [showQuiz, setShowQuiz] = useState(false);
   const [confusionDetectionActive, setConfusionDetectionActive] = useState(true);
   const [useSmartReading, setUseSmartReading] = useState(true);
@@ -30,7 +31,37 @@ const PlaylistCurriculumManager = () => {
   // Ref for chapter content to track reading position
   const chapterContentRef = useRef(null);
 
+  // Save state to localStorage whenever critical state changes
   useEffect(() => {
+    const state = {
+      selectedCurriculum,
+      selectedChapter,
+      activeView,
+      isProcessing,
+      processingStatus,
+      showAddForm,
+      newPlaylistUrl
+    };
+    localStorage.setItem('playlistCurriculumState', JSON.stringify(state));
+  }, [selectedCurriculum, selectedChapter, activeView, isProcessing, processingStatus, showAddForm, newPlaylistUrl]);
+
+  // Restore state from localStorage on component mount
+  useEffect(() => {
+    const savedState = localStorage.getItem('playlistCurriculumState');
+    if (savedState) {
+      try {
+        const state = JSON.parse(savedState);
+        if (state.selectedCurriculum) setSelectedCurriculum(state.selectedCurriculum);
+        if (state.selectedChapter) setSelectedChapter(state.selectedChapter);
+        if (state.activeView && state.activeView !== 'overview') setActiveView(state.activeView);
+        if (state.isProcessing) setIsProcessing(state.isProcessing);
+        if (state.processingStatus) setProcessingStatus(state.processingStatus);
+        if (state.showAddForm) setShowAddForm(state.showAddForm);
+        if (state.newPlaylistUrl) setNewPlaylistUrl(state.newPlaylistUrl);
+      } catch (e) {
+        console.log('Could not restore playlist curriculum state:', e);
+      }
+    }
     loadCurricula();
   }, []);
 
@@ -51,7 +82,7 @@ const PlaylistCurriculumManager = () => {
     if (!newPlaylistUrl.trim()) return;
 
     setIsProcessing(true);
-    setProcessingStatus('Processing playlist...');
+    setProcessingStatus('🔄 Processing playlist...');
     
     try {
       const response = await axios.post(`${API_BASE_URL}/playlist/process`, {
@@ -59,27 +90,29 @@ const PlaylistCurriculumManager = () => {
       });
 
       if (response.data.success) {
-        setProcessingStatus('Curriculum created successfully!');
+        setProcessingStatus('✅ Curriculum created successfully!');
         setTimeout(() => {
           setIsProcessing(false);
           setProcessingStatus('');
           setNewPlaylistUrl('');
           setShowAddForm(false);
+          // Clear localStorage when successfully creating new curriculum
+          localStorage.removeItem('playlistCurriculumState');
           loadCurricula();
         }, 2000);
       } else {
-        setProcessingStatus(`Error: ${response.data.error}`);
+        setProcessingStatus(`❌ Error: ${response.data.error}`);
         setTimeout(() => {
           setIsProcessing(false);
           setProcessingStatus('');
-        }, 3000);
+        }, 4000);
       }
     } catch (err) {
-      setProcessingStatus(`Error: ${err.response?.data?.detail || err.message}`);
+      setProcessingStatus(`❌ Error: ${err.response?.data?.detail || err.message}`);
       setTimeout(() => {
         setIsProcessing(false);
         setProcessingStatus('');
-      }, 3000);
+      }, 4000);
     }
   };
 
@@ -513,22 +546,25 @@ const PlaylistCurriculumManager = () => {
     <div className="playlist-curriculum-manager">
       <div className="curriculum-overview">
         <div className="overview-header">
+          <div className="header-gradient"></div>
           <h1>🎓 YouTube Playlist Curricula</h1>
           <p>Create structured learning curricula from YouTube playlists</p>
           
           <button 
-            className="add-curriculum-btn"
+            className="add-curriculum-btn btn btn-primary btn-lg"
             onClick={() => setShowAddForm(!showAddForm)}
           >
-            <Plus size={16} />
+            <Plus size={20} />
             Add New Curriculum
           </button>
         </div>
 
         {showAddForm && (
-          <div className="add-curriculum-form">
-            <div className="form-content">
+          <div className="card add-curriculum-form">
+            <div className="card-header">
               <h3>Create Curriculum from YouTube Playlist</h3>
+            </div>
+            <div className="card-body">
               <p>Enter a YouTube playlist URL to automatically generate a structured curriculum with notes and flashcards for each video.</p>
               
               <div className="input-group">
@@ -542,7 +578,7 @@ const PlaylistCurriculumManager = () => {
                 <button 
                   onClick={processPlaylist}
                   disabled={isProcessing || !newPlaylistUrl.trim()}
-                  className="process-btn"
+                  className="btn btn-success process-btn"
                 >
                   {isProcessing ? <Upload className="spinning" size={16} /> : <Upload size={16} />}
                   {isProcessing ? 'Processing...' : 'Create Curriculum'}
