@@ -596,9 +596,14 @@ const PlaylistCurriculumManager = () => {
 
         {curricula.length === 0 ? (
           <div className="empty-state">
-            <Youtube size={64} />
+            <div className="floating-orb"></div>
+            <div className="floating-orb"></div>
+            <div className="floating-orb"></div>
+            <div className="empty-state-icon">
+              <Youtube size={32} />
+            </div>
             <h3>No Curricula Yet</h3>
-            <p>Create your first curriculum by adding a YouTube playlist above.</p>
+            <p>Create your first curriculum by adding a YouTube playlist above. Transform any educational content into structured learning paths.</p>
           </div>
         ) : (
           <div className="curricula-grid">

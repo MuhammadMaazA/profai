@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Send, BookOpen, Code, Zap, MessageCircle, Youtube } from 'lucide-react';
+import { Mic, MicOff, Send, BookOpen, Code, Zap, MessageCircle, Youtube, VolumeX, Volume2 } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import PlaylistCurriculumManager from './PlaylistCurriculumManager';
@@ -48,6 +48,7 @@ function App() {
   const [learningPath, setLearningPath] = useState('hybrid');
   const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [conversationHistory, setConversationHistory] = useState([]);
+  const [isAudioMuted, setIsAudioMuted] = useState(false);
   const messagesEndRef = useRef(null);
   const audioChunksRef = useRef([]);
 
@@ -59,7 +60,38 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  // Function to generate audio on demand
+  // Function to automatically generate and play audio for new AI messages
+  const autoGenerateAudio = async (messageContent, messageIndex) => {
+    if (isAudioMuted) return;
+
+    try {
+      console.log('🔊 Auto-generating audio for message:', messageContent.substring(0, 50) + '...');
+      const response = await axios.post(`${API_BASE_URL}/tts`, {
+        text: messageContent,
+        play_audio: false,
+      });
+
+      if (response.data.audio_path) {
+        console.log('✅ Audio generated successfully, auto-playing...');
+        const audioUrl = `${API_BASE_URL}/audio/${response.data.audio_path}`;
+        
+        // Update message with audio URL
+        setMessages(prev => prev.map((msg, idx) => 
+          idx === messageIndex 
+            ? { ...msg, audioUrl }
+            : msg
+        ));
+
+        // Auto-play the audio
+        const audio = new Audio(audioUrl);
+        audio.play().catch(console.error);
+      }
+    } catch (error) {
+      console.error('❌ Error auto-generating audio:', error);
+    }
+  };
+
+  // Function to generate audio on demand (for manual play button)
   const generateAudioForMessage = async (messageIndex) => {
     const message = messages[messageIndex];
     if (!message || message.type !== 'ai' || message.audioUrl === 'loading') return;
@@ -286,15 +318,23 @@ function App() {
       setMessages(prev => [...prev, userMessage]);
       setConversationHistory(prev => [...prev, transcription]);
 
-      // Add AI response with loading audio state initially
+      // Add AI response and auto-generate audio if not muted
       const aiMessage = {
         type: 'ai',
         content: aiResponse,
-        audioUrl: null, // No auto-generation, user clicks to generate
+        audioUrl: null,
         emotion: detected_emotion
       };
       
-      setMessages(prev => [...prev, aiMessage]);
+      setMessages(prev => {
+        const newMessages = [...prev, aiMessage];
+        const messageIndex = newMessages.length - 1;
+        
+        // Auto-generate audio for the new AI message
+        autoGenerateAudio(aiResponse, messageIndex);
+        
+        return newMessages;
+      });
       setConversationHistory(prev => [...prev, aiResponse]);
 
     } catch (err) {
@@ -335,15 +375,23 @@ function App() {
 
       const { answer, audio_path } = response.data;
 
-      // Add AI response with no audio initially
+      // Add AI response and auto-generate audio if not muted
       const aiMessage = {
         type: 'ai',
         content: answer,
-        audioUrl: null, // No auto-generation, user clicks to generate
+        audioUrl: null,
         emotion: null
       };
       
-      setMessages(prev => [...prev, aiMessage]);
+      setMessages(prev => {
+        const newMessages = [...prev, aiMessage];
+        const messageIndex = newMessages.length - 1;
+        
+        // Auto-generate audio for the new AI message
+        autoGenerateAudio(answer, messageIndex);
+        
+        return newMessages;
+      });
       setConversationHistory(prev => [...prev, answer]);
 
     } catch (err) {
@@ -413,16 +461,24 @@ function App() {
       <div className="header">
         <div className="header-content">
           <div className="title-section">
-            <h1>🎓 ProfAI</h1>
+            <h1>ProfAI</h1>
             <p>Your AI Tutor with Voice Chat & YouTube Curricula</p>
           </div>
           <div className="header-controls">
             <button 
               className="control-button"
+              onClick={() => setIsAudioMuted(!isAudioMuted)}
+              title={isAudioMuted ? "Unmute AI Audio" : "Mute AI Audio"}
+            >
+              {isAudioMuted ? <VolumeX size={18} /> : <Volume2 size={18} />}
+              {isAudioMuted ? 'Unmute' : 'Mute'}
+            </button>
+            <button 
+              className="control-button"
               onClick={() => setShowSettings(!showSettings)}
               title="Settings"
             >
-              ⚙️ Settings
+              Settings
             </button>
           </div>
         </div>
@@ -450,7 +506,7 @@ function App() {
       {showSettings && (
         <div className="settings-panel">
           <div className="settings-content">
-            <h3>⚙️ Learning Preferences</h3>
+            <h3>Learning Preferences</h3>
             
             <div className="setting-group">
               <label>Learning Path:</label>
@@ -519,40 +575,12 @@ function App() {
                 </div>
                 <div className="message-meta">
                   <EmotionBadge emotion={message.emotion} />
-                  {message.type === 'ai' && (
+                  {message.type === 'ai' && message.audioUrl === 'loading' && (
                     <div className="audio-controls">
-                      {message.audioUrl === 'loading' ? (
-                        <div className="audio-loading">
-                          <span className="loading-spinner small"></span>
-                          🎧 Generating audio...
-                        </div>
-                      ) : message.audioUrl ? (
-                        <div className="audio-player">
-                          <audio 
-                            controls
-                            onLoadedMetadata={(e) => {
-                              if (e.target.duration === 0 || isNaN(e.target.duration)) {
-                                console.warn('Audio file appears to be empty or corrupted');
-                              }
-                            }}
-                            onError={(e) => {
-                              console.warn('Audio playback error:', e);
-                            }}
-                          >
-                            <source src={message.audioUrl} type="audio/mpeg" />
-                            Your browser does not support the audio element.
-                          </audio>
-                        </div>
-                      ) : (
-                        <button 
-                          className="btn btn-secondary btn-sm audio-generate-btn"
-                          onClick={() => generateAudioForMessage(index)}
-                          title="Generate and play audio for this response"
-                        >
-                          <span className="btn-icon">🔊</span>
-                          Play Audio
-                        </button>
-                      )}
+                      <div className="audio-loading">
+                        <span className="loading-spinner small"></span>
+                        🎧 Generating audio...
+                      </div>
                     </div>
                   )}
                 </div>
