@@ -18,9 +18,25 @@ OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 def get_multilingual_voice_and_model(language: str = "en") -> Dict[str, str]:
     """
-    Returns appropriate voice and model for different languages.
+    Returns appropriate voice and model for different languages with cost optimization.
     ElevenLabs supports multilingual voices and models.
     """
+    from .config import settings
+    
+    # Cost-saving: Use cheaper monolingual model for English when in cost-saving mode
+    if settings.cost_saving_mode and language == "en":
+        return {
+            "voice": "21m00Tcm4TlvDq8ikWAM",
+            "model": "eleven_monolingual_v1"  # Cheaper for English-only
+        }
+    
+    # Smart multilingual: Only use expensive multilingual when actually needed
+    if settings.multilingual_only_when_needed and language == "en":
+        return {
+            "voice": "21m00Tcm4TlvDq8ikWAM", 
+            "model": "eleven_monolingual_v1"
+        }
+    
     # Language-specific voice configurations
     voice_configs = {
         "en": {  # English
@@ -77,6 +93,46 @@ def get_multilingual_voice_and_model(language: str = "en") -> Dict[str, str]:
 
 
 def get_voice_settings_for_emotion(user_emotion: Optional[str], content_type: str = "explanation") -> Dict[str, Any]:
+    """
+    Get voice settings based on detected emotion with cost optimization.
+    Simplified settings to reduce API complexity and costs.
+    """
+    from .config import settings
+    
+    # In cost-saving mode, use simplified voice settings
+    if settings.cost_saving_mode:
+        return {
+            'stability': 0.4,  # Standard stability
+            'similarity_boost': 0.7,  # Standard similarity
+            'style': 0.2,  # Minimal style changes
+            'use_speaker_boost': True
+        }
+    
+    # Emotion-based voice adjustments (original complexity)
+    base_settings = {
+        'stability': 0.3,
+        'similarity_boost': 0.75,
+        'style': 0.4,
+        'use_speaker_boost': True
+    }
+    
+    if not user_emotion:
+        return base_settings
+    
+    # Simplified emotion mapping for cost-saving
+    emotion_adjustments = {
+        'excited': {'stability': 0.2, 'style': 0.6},
+        'calm': {'stability': 0.5, 'style': 0.2},
+        'confused': {'stability': 0.4, 'style': 0.3},
+        'frustrated': {'stability': 0.3, 'style': 0.4},
+        'engaged': {'stability': 0.3, 'style': 0.4},
+    }
+    
+    # Apply emotion adjustments
+    adjustments = emotion_adjustments.get(user_emotion.lower(), {})
+    final_settings = {**base_settings, **adjustments}
+    
+    return final_settings
     """
     Returns ElevenLabs voice settings based on user emotion and content type.
     This makes the AI respond with appropriate tone like a human teacher would.

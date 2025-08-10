@@ -18,6 +18,7 @@ from .specializations import (
     get_lesson_by_id, get_lessons_by_path, recommend_next_lesson
 )
 from .emotion_detection import emotion_detector
+from .youtube_processor import YouTubeProcessor
 
 
 app = FastAPI(title="ProfAI API", version="0.2.0")
@@ -65,6 +66,16 @@ class LessonRequest(BaseModel):
     learning_path: str
     delivery_format: str
     user_question: Optional[str] = None
+
+
+class YouTubeRequest(BaseModel):
+    url: str
+    language: str = "en"
+
+
+class FlashcardUpdateRequest(BaseModel):
+    card_id: str
+    status: str  # new, learning, learned, review
 
 
 class ProgressRequest(BaseModel):
@@ -490,3 +501,178 @@ async def upload_audio_endpoint(audio_file: UploadFile = File(...)):
         
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# YouTube Flashcard Endpoints
+youtube_processor = YouTubeProcessor()
+
+
+@app.post("/youtube/process")
+async def process_youtube_video(request: YouTubeRequest):
+    """Process YouTube video and generate flashcards"""
+    try:
+        result = youtube_processor.process_youtube_url(request.url, request.language)
+        
+        if not result["success"]:
+            return {
+                "success": False,
+                "error": result["error"],
+                "is_educational": result.get("is_educational", False),
+                "analysis": result.get("analysis", {})
+            }
+        
+        # Save the flashcard set
+        flashcard_set = result["flashcard_set"]
+        import datetime
+        flashcard_set.created_at = datetime.datetime.now().isoformat()
+        
+        # Update card timestamps
+        for card in flashcard_set.cards:
+            card.created_at = flashcard_set.created_at
+        
+        # Save to storage
+        file_path = youtube_processor.save_flashcard_set(flashcard_set)
+        
+        return {
+            "success": True,
+            "is_educational": True,
+            "flashcard_set": {
+                "id": flashcard_set.id,
+                "title": flashcard_set.title,
+                "description": flashcard_set.description,
+                "video_url": flashcard_set.video_url,
+                "video_title": flashcard_set.video_title,
+                "video_duration": flashcard_set.video_duration,
+                "total_cards": flashcard_set.total_cards,
+                "learned_cards": flashcard_set.learned_cards,
+                "learning_cards": flashcard_set.learning_cards,
+                "created_at": flashcard_set.created_at,
+                "cards": [
+                    {
+                        "id": card.id,
+                        "question": card.question,
+                        "answer": card.answer,
+                        "category": card.category,
+                        "difficulty": card.difficulty,
+                        "tags": card.tags,
+                        "status": card.status,
+                        "review_count": card.review_count,
+                        "created_at": card.created_at,
+                        "last_reviewed": card.last_reviewed
+                    }
+                    for card in flashcard_set.cards
+                ]
+            },
+            "video_info": result["video_info"],
+            "analysis": result["analysis"]
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error processing YouTube video: {str(e)}")
+
+
+@app.get("/flashcards/sets")
+async def list_flashcard_sets():
+    """List all available flashcard sets"""
+    try:
+        sets = youtube_processor.list_flashcard_sets()
+        return {"sets": sets}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error listing flashcard sets: {str(e)}")
+
+
+@app.get("/flashcards/sets/{set_id}")
+async def get_flashcard_set(set_id: str):
+    """Get a specific flashcard set"""
+    try:
+        flashcard_set = youtube_processor.load_flashcard_set(set_id)
+        if not flashcard_set:
+            raise HTTPException(status_code=404, detail="Flashcard set not found")
+        
+        return {
+            "id": flashcard_set.id,
+            "title": flashcard_set.title,
+            "description": flashcard_set.description,
+            "video_url": flashcard_set.video_url,
+            "video_title": flashcard_set.video_title,
+            "video_duration": flashcard_set.video_duration,
+            "total_cards": flashcard_set.total_cards,
+            "learned_cards": flashcard_set.learned_cards,
+            "learning_cards": flashcard_set.learning_cards,
+            "created_at": flashcard_set.created_at,
+            "cards": [
+                {
+                    "id": card.id,
+                    "question": card.question,
+                    "answer": card.answer,
+                    "category": card.category,
+                    "difficulty": card.difficulty,
+                    "tags": card.tags,
+                    "status": card.status,
+                    "review_count": card.review_count,
+                    "created_at": card.created_at,
+                    "last_reviewed": card.last_reviewed
+                }
+                for card in flashcard_set.cards
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error getting flashcard set: {str(e)}")
+
+
+@app.put("/flashcards/sets/{set_id}/cards/{card_id}")
+async def update_flashcard_status(set_id: str, card_id: str, request: FlashcardUpdateRequest):
+    """Update flashcard learning status"""
+    try:
+        flashcard_set = youtube_processor.load_flashcard_set(set_id)
+        if not flashcard_set:
+            raise HTTPException(status_code=404, detail="Flashcard set not found")
+        
+        # Find and update the card
+        card_found = False
+        for card in flashcard_set.cards:
+            if card.id == card_id:
+                card.status = request.status
+                card.review_count += 1
+                import datetime
+                card.last_reviewed = datetime.datetime.now().isoformat()
+                card_found = True
+                break
+        
+        if not card_found:
+            raise HTTPException(status_code=404, detail="Flashcard not found")
+        
+        # Recalculate statistics
+        flashcard_set.learned_cards = len([c for c in flashcard_set.cards if c.status == "learned"])
+        flashcard_set.learning_cards = len([c for c in flashcard_set.cards if c.status == "learning"])
+        
+        # Save updated set
+        youtube_processor.save_flashcard_set(flashcard_set)
+        
+        return {
+            "success": True,
+            "message": f"Card {card_id} status updated to {request.status}",
+            "set_stats": {
+                "total_cards": flashcard_set.total_cards,
+                "learned_cards": flashcard_set.learned_cards,
+                "learning_cards": flashcard_set.learning_cards
+            }
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error updating flashcard: {str(e)}")
+
+
+@app.delete("/flashcards/sets/{set_id}")
+async def delete_flashcard_set(set_id: str):
+    """Delete a flashcard set"""
+    try:
+        file_path = youtube_processor.data_dir / f"{set_id}.json"
+        if not file_path.exists():
+            raise HTTPException(status_code=404, detail="Flashcard set not found")
+        
+        os.unlink(file_path)
+        return {"success": True, "message": f"Flashcard set {set_id} deleted"}
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error deleting flashcard set: {str(e)}")

@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Mic, MicOff, Send, BookOpen, Code, Zap, Settings } from 'lucide-react';
+import { Mic, MicOff, Send, BookOpen, Code, Zap, MessageCircle, Brain } from 'lucide-react';
 import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
+import FlashcardDeck from './FlashcardDeck';
 import './index.css';
 
 const API_BASE_URL = 'http://localhost:8000';
@@ -35,11 +36,12 @@ const LANGUAGES = {
 };
 
 function App() {
+  const [activeTab, setActiveTab] = useState('chat'); // New state for tab management
   const [messages, setMessages] = useState([
     {
       type: 'ai',
       content: "Hello! I'm ProfAI, your specialized AI professor. I can teach AI theory, practical tooling, or both. Choose your learning path and let's start your AI journey!",
-      audioUrl: 'loading', // Use 'loading' instead of null to show proper state
+      audioUrl: null, // No automatic audio generation to save credits
       emotion: null
     }
   ]);
@@ -48,7 +50,6 @@ function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [mediaRecorder, setMediaRecorder] = useState(null);
-  const [audioChunks, setAudioChunks] = useState([]);
   const [showSettings, setShowSettings] = useState(false);
   const [showCurriculum, setShowCurriculum] = useState(false);
   const [learningPath, setLearningPath] = useState('hybrid');
@@ -66,8 +67,15 @@ function App() {
     scrollToBottom();
   }, [messages]);
 
-  // Generate audio for welcome message on component mount
+  // Generate audio for welcome message on component mount - DISABLED TO SAVE CREDITS
   useEffect(() => {
+    // Automatic welcome audio disabled to save API credits
+    // Only generate TTS when user explicitly requests it
+    return; // Early return to disable this feature
+    
+    // Only generate welcome audio when on chat tab
+    if (activeTab !== 'chat') return;
+    
     const generateWelcomeAudio = async () => {
       try {
         const welcomeMessage = "Hello! I'm ProfAI, your specialized AI professor. I can teach AI theory, practical tooling, or both. Choose your learning path and let's start your AI journey!";
@@ -108,7 +116,7 @@ function App() {
     };
 
     generateWelcomeAudio();
-  }, []); // Empty dependency array means this runs once on mount
+  }, [activeTab, selectedLanguage]); // Depend on activeTab and selectedLanguage
 
   const startRecording = async () => {
     setError('');
@@ -137,13 +145,11 @@ function App() {
       
       // Clear previous chunks
       audioChunksRef.current = [];
-      setAudioChunks([]);
       
       recorder.ondataavailable = (event) => {
         if (event.data.size > 0) {
           console.log('Received audio chunk:', event.data.size, 'bytes');
           audioChunksRef.current.push(event.data);
-          setAudioChunks(prev => [...prev, event.data]);
         }
       };
 
@@ -165,7 +171,6 @@ function App() {
         
         // Clear chunks for next recording
         audioChunksRef.current = [];
-        setAudioChunks([]);
         
         // Stop all tracks to release the microphone
         stream.getTracks().forEach(track => track.stop());
@@ -570,7 +575,7 @@ function App() {
         <div className="header-content">
           <div className="title-section">
             <h1>🎓 ProfAI</h1>
-            <p>Your AI Tutor with Voice Chat</p>
+            <p>Your AI Tutor with Voice Chat & Flashcards</p>
           </div>
           <div className="header-controls">
             <button 
@@ -589,6 +594,24 @@ function App() {
             </button>
           </div>
         </div>
+      </div>
+
+      {/* Main Tab Navigation */}
+      <div className="main-tabs">
+        <button 
+          className={`main-tab ${activeTab === 'chat' ? 'active' : ''}`}
+          onClick={() => setActiveTab('chat')}
+        >
+          <MessageCircle size={20} />
+          AI Chat
+        </button>
+        <button 
+          className={`main-tab ${activeTab === 'flashcards' ? 'active' : ''}`}
+          onClick={() => setActiveTab('flashcards')}
+        >
+          <Brain size={20} />
+          Flashcards
+        </button>
       </div>
 
       {/* Settings Panel */}
@@ -668,7 +691,9 @@ function App() {
         </div>
       )}
 
-      <div className="chat-container">
+      {/* Tab Content */}
+      {activeTab === 'chat' && (
+        <div className="chat-container">
         <div className="chat-messages">
           {messages.map((message, index) => (
             <div key={index} className={`message ${message.type}`}>
@@ -764,6 +789,12 @@ function App() {
           </div>
         </div>
       </div>
+      )}
+
+      {/* Flashcard Tab Content */}
+      {activeTab === 'flashcards' && (
+        <FlashcardDeck />
+      )}
     </div>
   );
 }
