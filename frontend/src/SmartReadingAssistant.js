@@ -15,6 +15,35 @@ const SmartReadingAssistant = ({ content, title }) => {
   const contentRef = useRef(null);
   const debounceRef = useRef(null);
 
+  // Define analyzeCurrentReading first
+  const analyzeCurrentReading = useCallback(async (visibleText, scrollPosition) => {
+    if (!visibleText || isAnalyzing) return;
+
+    setIsAnalyzing(true);
+    
+    try {
+      const response = await axios.post(`${API_BASE_URL}/track-reading`, {
+        text_content: content,
+        user_position: {
+          scroll_position: scrollPosition / 100,
+          visible_text: visibleText
+        }
+      });
+
+      setContextualHelp(response.data);
+      
+      // Auto-show help panel if text is difficult
+      if (response.data.difficulty_estimate === 'hard') {
+        setShowHelpPanel(true);
+      }
+
+    } catch (error) {
+      console.error('Error analyzing reading:', error);
+    } finally {
+      setIsAnalyzing(false);
+    }
+  }, [content, isAnalyzing]);
+
   // Track reading progress and visible content
   const handleScroll = useCallback(() => {
     if (!contentRef.current) return;
@@ -69,34 +98,6 @@ const SmartReadingAssistant = ({ content, title }) => {
 
     return '';
   };
-
-  const analyzeCurrentReading = useCallback(async (visibleText, scrollPosition) => {
-    if (!visibleText || isAnalyzing) return;
-
-    setIsAnalyzing(true);
-    
-    try {
-      const response = await axios.post(`${API_BASE_URL}/track-reading`, {
-        text_content: content,
-        user_position: {
-          scroll_position: scrollPosition / 100,
-          visible_text: visibleText
-        }
-      });
-
-      setContextualHelp(response.data);
-      
-      // Auto-show help panel if text is difficult
-      if (response.data.difficulty_estimate === 'hard') {
-        setShowHelpPanel(true);
-      }
-
-    } catch (error) {
-      console.error('Error analyzing reading:', error);
-    } finally {
-      setIsAnalyzing(false);
-    }
-  }, [content, isAnalyzing]);
 
   // Handle text selection for instant help
   const handleTextSelection = () => {

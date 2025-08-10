@@ -35,11 +35,15 @@ const PlaylistCurriculumManager = () => {
   }, []);
 
   const loadCurricula = async () => {
+    console.log('Loading curricula from:', `${API_BASE_URL}/playlist/curricula`);
     try {
       const response = await axios.get(`${API_BASE_URL}/playlist/curricula`);
+      console.log('Curricula response:', response.data);
       setCurricula(response.data.curricula);
+      console.log('Set curricula state:', response.data.curricula);
     } catch (err) {
       console.error('Error loading curricula:', err);
+      console.error('Error details:', err.response?.data);
     }
   };
 
@@ -80,12 +84,17 @@ const PlaylistCurriculumManager = () => {
   };
 
   const loadCurriculumDetails = async (curriculumId) => {
+    console.log('loadCurriculumDetails called with ID:', curriculumId);
     try {
+      console.log('Making API request to:', `${API_BASE_URL}/playlist/curriculum/${curriculumId}`);
       const response = await axios.get(`${API_BASE_URL}/playlist/curriculum/${curriculumId}`);
+      console.log('API response:', response.data);
       setSelectedCurriculum(response.data);
       setActiveView('curriculum');
+      console.log('Updated state - activeView set to: curriculum');
     } catch (err) {
       console.error('Error loading curriculum details:', err);
+      console.error('Error details:', err.response?.data);
     }
   };
 
@@ -601,7 +610,11 @@ const PlaylistCurriculumManager = () => {
                 <div className="curriculum-actions">
                   <button 
                     className="continue-btn"
-                    onClick={() => loadCurriculumDetails(curriculum.id)}
+                    onClick={() => {
+                      console.log('Start Learning clicked for curriculum:', curriculum.id);
+                      console.log('Full curriculum object:', curriculum);
+                      loadCurriculumDetails(curriculum.id);
+                    }}
                   >
                     <PlayCircle size={16} />
                     {curriculum.progress_percentage > 0 ? 'Continue' : 'Start Learning'}

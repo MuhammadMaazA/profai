@@ -75,49 +75,49 @@ class PersonalizedQuizGenerator:
         weak_areas_text = f"Focus extra attention on these areas where the user struggles: {', '.join(weak_areas)}" if weak_areas else ""
         
         return f"""
-Generate a content-based quiz for the chapter: "{title}"
+Generate a detailed quiz for the chapter: "{title}"
 
 CHAPTER CONTENT:
-{content[:2000]}...
+{content[:3000]}
 
 QUIZ REQUIREMENTS:
-- Generate 5-8 multiple choice questions DIRECTLY about the content
-- Each question must test knowledge of specific facts, concepts, or procedures from the chapter
+- Generate exactly 7-10 multiple choice questions about the specific content above
+- Each question must test knowledge of concrete facts, procedures, or concepts from the chapter
 - Include 4 options each (A, B, C, D)
 - {weak_areas_text}
-- Mix difficulty levels: {difficulty}
-- Questions should be about WHAT was taught, not reflective questions
-- Focus on definitions, formulas, steps, examples, and specific information from the content
-- Include detailed explanations for each answer
+- Mix difficulty levels: 30% easy, 50% medium, 20% hard
+- NO generic reflective questions like "What did you learn?"
+- Focus on SPECIFIC content: definitions, examples, steps, formulas, key points
 
-JSON FORMATTING RULES:
-- Use only basic ASCII characters in questions and explanations
-- Replace mathematical symbols: use >= instead of ≥, <= instead of ≤
-- Avoid angle brackets < > and HTML tags
-- Escape all quotes in text with backslash
-- Use simple mathematical notation without special Unicode symbols
+QUESTION TYPES TO INCLUDE:
+1. Definition questions: "What is [specific term mentioned]?"
+2. Example questions: "Which example was used to demonstrate [concept]?"  
+3. Process questions: "What are the steps to [specific process mentioned]?"
+4. Comparison questions: "What is the difference between [A] and [B]?"
+5. Application questions: "When would you use [specific technique]?"
 
-EXAMPLE GOOD QUESTIONS:
-- "What is the definition of [concept from content]?"
-- "According to the chapter, which formula is used to calculate [specific thing]?"
-- "What are the three steps mentioned for [specific process]?"
-- "Which example was given to illustrate [specific concept]?"
-
-RESPONSE FORMAT (JSON):
+JSON FORMAT - USE EXACTLY THIS STRUCTURE:
 {{
   "questions": [
     {{
-      "id": "q1",
-      "question": "Clear, specific question about content",
+      "id": "q1", 
+      "question": "Specific question about chapter content?",
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "correct_answer": 0,
-      "explanation": "Detailed explanation of why this is correct",
-      "difficulty": "easy|medium|hard",
-      "topic": "specific topic name",
+      "explanation": "Clear explanation referencing the chapter content",
+      "difficulty": "easy",
+      "topic": "specific_topic_name",
       "concepts": ["concept1", "concept2"]
     }}
   ]
 }}
+
+CRITICAL: 
+- Base ALL questions on the actual chapter content provided above
+- Make questions specific and testable
+- Avoid vague or subjective questions
+- Include 7-10 questions minimum
+- Ensure JSON is properly formatted
 
 Generate the quiz now:
 """
